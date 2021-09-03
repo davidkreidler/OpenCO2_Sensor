@@ -28,3 +28,5 @@ mittels des ESP32-S2 Prozessors auf einem selbst designten PCB ist eine APP Anbi
 Somit sind Push Benachrichtigungen Fenster (auf / zu) und Langzeitmessungen möglich.
 
 ![alt text](https://github.com/davidkreidler/SCD4x_CO2_Sensor_ESP32/raw/main/pictures/animation.gif)
+
+![alt text](https://github.com/davidkreidler/SCD4x_CO2_Sensor_ESP32/raw/main/pictures/pcb.png)
