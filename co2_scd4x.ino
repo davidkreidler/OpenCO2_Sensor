@@ -313,10 +313,10 @@ void loop(){
     Paint_DrawRectangle(15, 145, 105*(percentage/100.0)+15, 169, BLACK, DOT_PIXEL_1X1, DRAW_FILL_FULL);
   }
 
-  //Paint_DrawNum(0, 0, (int32_t)refreshes, &Font20, BLACK, WHITE);
+  /*Paint_DrawNum(0, 0, (int32_t)refreshes, &Font20, BLACK, WHITE);
   char dataReadyErrorCount_c[10];
   sprintf(dataReadyErrorCount_c, "%d", dataReadyErrorCount);
-  Paint_DrawString_EN(160, 180, dataReadyErrorCount_c, &Font20, WHITE, BLACK);
+  Paint_DrawString_EN(160, 180, dataReadyErrorCount_c, &Font20, WHITE, BLACK);*/
   if (refreshes == 1) {
     EPD_1IN54_V2_Init();
     EPD_1IN54_V2_Display(BlackImage);
