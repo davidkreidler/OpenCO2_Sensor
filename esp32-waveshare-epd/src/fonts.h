@@ -86,6 +86,10 @@ extern sFONT Font8;
 
 extern cFONT Font12CN;
 extern cFONT Font24CN;
+
+extern sFONT bahn_big;
+extern sFONT bahn_mid;
+extern sFONT bahn_sml;
 // extern const unsigned char Font16_Table[];
 
 #ifdef __cplusplus

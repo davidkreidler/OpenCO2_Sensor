@@ -98,7 +98,7 @@ typedef struct {
     UWORD HeightByte;
     UWORD Scale;
 } PAINT;
-extern PAINT Paint;
+RTC_DATA_ATTR extern PAINT Paint; /* keep in memory while ESP is sleeping */ 
 
 /**
  * Display rotate
