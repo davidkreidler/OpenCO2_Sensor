@@ -7,16 +7,17 @@
 /* welcome */
 #include <EEPROM.h>
 
-/* APP */
-//#define USEAPP
-#ifdef USEAPP
+/* WIFI */
+//#define WIFI
+#ifdef WIFI
 #include <WiFi.h>
-#include <WiFiClient.h>
-#include <BlynkSimpleEsp32.h>
-
-char auth[] = "xxx";
-char ssid[] = "xxx";
-char pass[] = "xxx";
+#include <WiFiManager.h>
+#include <HTTPClient.h>
+#include <BluetoothSerial.h>
+#include "driver/adc.h"
+#include <esp_wifi.h>
+#include <esp_sleep.h>
+WiFiManager wifiManager;
 #endif
 
 /* led */
@@ -44,10 +45,10 @@ RTC_DATA_ATTR int ledbrightness = 5;
 RTC_DATA_ATTR uint16_t co2 = 400;
 RTC_DATA_ATTR int dataReadyErrorCount = 0;
 
-#ifdef USEAPP
-#define tempOffset 11.0
+#ifdef WIFI
+#define tempOffset 13.0
 #else
-#define tempOffset 4.6 // was 5.8
+#define tempOffset 4.4 // was 5.8
 #endif
 
 void displayWelcome() {
@@ -62,9 +63,8 @@ void displayWelcome() {
   esp_sleep_pd_config(ESP_PD_DOMAIN_RTC_SLOW_MEM, ESP_PD_OPTION_OFF); // RTC slow memory: auto
   esp_sleep_pd_config(ESP_PD_DOMAIN_RTC_FAST_MEM, ESP_PD_OPTION_OFF);  // RTC fast memory
   esp_sleep_pd_config(ESP_PD_DOMAIN_XTAL, ESP_PD_OPTION_OFF);          // XTAL oscillator
-  esp_sleep_pd_config(ESP_PD_DOMAIN_CPU, ESP_PD_OPTION_OFF);           // CPU core
+  esp_sleep_pd_config(ESP_PD_DOMAIN_RTC8M, ESP_PD_OPTION_OFF);         // CPU core
   esp_sleep_pd_config(ESP_PD_DOMAIN_VDDSDIO, ESP_PD_OPTION_OFF);
-  esp_sleep_pd_config(ESP_PD_DOMAIN_MAX, ESP_PD_OPTION_OFF);           // Number of domains
   esp_deep_sleep_start();
 }
 
@@ -92,47 +92,27 @@ void initOnce() {
   initDone = true;
 }
 
-#ifdef USEAPP
-void sendNotifications(uint16_t co2) {
-  if (co2 > 1500) {
-    if (!fensterAuf) {
-      char message[128];
-      snprintf(message, sizeof(message), "Fenster öffnen! CO2: %D ppm", co2);
-      Blynk.notify(message);
-      fensterAuf = true;
-    }
-  } else {
-    if (co2 < 1400) fensterAuf = false;
-  }
-
-  if (co2 < 600) {
-    if (!fensterZu) {
-      char message[128];
-      snprintf(message, sizeof(message), "Fenster schließen CO2: %D ppm", co2);
-      Blynk.notify(message);
-      fensterZu = true;
-    }
-  } else {
-    if (co2 > 700) fensterZu = false;
-  }
-}
-/* get led brightness slider */
-/*BLYNK_WRITE(V4) {
-  ledbrightness = param.asInt();
-}*/
-#endif
-
 void setLED(uint16_t co2) {
-  int red   =   pow((co2-400),2)/10000;       //= 0.13 * co2 - 90;
-  int green = - pow((co2-400),2)/4500 + 255;  //-0.21 * co2 + 318;
+  int red = 0, green = 0, blue = 0;
 
+  if (co2 > 2000) {
+    red = 216; green = 2; blue = 131; //magenta
+  } else {
+    red   =   pow((co2-400),2)/10000;       //= 0.13 * co2 - 90;
+    green = - pow((co2-400),2)/4500 + 255;  //-0.21 * co2 + 318;
+  }
   if (red < 0) red = 0;
   if (red > 255) red = 255;
   if (green < 0) green = 0;
+  if (green > 255) green = 255;
+  if (blue < 0) blue = 0;
+  if (blue > 255) blue = 255;
+  
   red = (int)(red * (ledbrightness/100.0));
   green = (int)(green * (ledbrightness/100.0));
+  blue = (int)(blue * (ledbrightness/100.0));
     
-  strip.setPixelColor(0, green, red, 0); //index, green, red, blue
+  strip.setPixelColor(0, green, red, blue);
   strip.show();
 }
 
@@ -157,39 +137,42 @@ void lowBatteryMode() {
   esp_sleep_pd_config(ESP_PD_DOMAIN_RTC_SLOW_MEM, ESP_PD_OPTION_AUTO); // RTC slow memory: auto
   esp_sleep_pd_config(ESP_PD_DOMAIN_RTC_FAST_MEM, ESP_PD_OPTION_OFF);  // RTC fast memory
   esp_sleep_pd_config(ESP_PD_DOMAIN_XTAL, ESP_PD_OPTION_OFF);          // XTAL oscillator
-  esp_sleep_pd_config(ESP_PD_DOMAIN_CPU, ESP_PD_OPTION_OFF);           // CPU core
+  esp_sleep_pd_config(ESP_PD_DOMAIN_RTC8M, ESP_PD_OPTION_OFF);         // CPU core
   esp_sleep_pd_config(ESP_PD_DOMAIN_VDDSDIO, ESP_PD_OPTION_OFF);
-  esp_sleep_pd_config(ESP_PD_DOMAIN_MAX, ESP_PD_OPTION_OFF);           // Number of domains
   esp_deep_sleep_start();
 }
 
 void goto_deep_sleep() {
+#ifdef WIFI
+  //WiFi.setSleep(true);
+  WiFi.disconnect(true);  // Disconnect from the network
+  WiFi.mode(WIFI_OFF);    // Switch WiFi off
+#endif
   esp_sleep_enable_ext0_wakeup((gpio_num_t)4,1);
   esp_sleep_enable_timer_wakeup(29000000);  // periodic measurement every 30 sec - 0.83 sec awake 
   esp_sleep_pd_config(ESP_PD_DOMAIN_RTC_PERIPH, ESP_PD_OPTION_AUTO);    // RTC IO, sensors and ULP co-processor
   esp_sleep_pd_config(ESP_PD_DOMAIN_RTC_SLOW_MEM, ESP_PD_OPTION_AUTO); // RTC slow memory: auto
   esp_sleep_pd_config(ESP_PD_DOMAIN_RTC_FAST_MEM, ESP_PD_OPTION_OFF);  // RTC fast memory
   esp_sleep_pd_config(ESP_PD_DOMAIN_XTAL, ESP_PD_OPTION_OFF);          // XTAL oscillator
-  esp_sleep_pd_config(ESP_PD_DOMAIN_CPU, ESP_PD_OPTION_OFF);           // CPU core
+  esp_sleep_pd_config(ESP_PD_DOMAIN_RTC8M, ESP_PD_OPTION_OFF);         // CPU core
   esp_sleep_pd_config(ESP_PD_DOMAIN_VDDSDIO, ESP_PD_OPTION_OFF);
-  esp_sleep_pd_config(ESP_PD_DOMAIN_MAX, ESP_PD_OPTION_OFF);           // Number of domains
+  
   commingFromDeepSleep = true;
   esp_deep_sleep_start();
 }
 
 void goto_light_sleep(int ms){
   commingFromDeepSleep = false;
-#ifdef USEAPP
-  delay(3900);
+#ifdef WIFI
+  delay(ms);
 #else
   esp_sleep_enable_timer_wakeup(ms*1000);  // periodic measurement every 5 sec -1.1 sec awake
   esp_sleep_pd_config(ESP_PD_DOMAIN_RTC_PERIPH, ESP_PD_OPTION_ON);    // RTC IO, sensors and ULP co-processor
   esp_sleep_pd_config(ESP_PD_DOMAIN_RTC_SLOW_MEM, ESP_PD_OPTION_AUTO); // RTC slow memory: auto
   esp_sleep_pd_config(ESP_PD_DOMAIN_RTC_FAST_MEM, ESP_PD_OPTION_OFF);  // RTC fast memory
   esp_sleep_pd_config(ESP_PD_DOMAIN_XTAL, ESP_PD_OPTION_OFF);          // XTAL oscillator
-  esp_sleep_pd_config(ESP_PD_DOMAIN_CPU, ESP_PD_OPTION_OFF);           // CPU core
+  esp_sleep_pd_config(ESP_PD_DOMAIN_RTC8M, ESP_PD_OPTION_OFF);         // CPU core
   esp_sleep_pd_config(ESP_PD_DOMAIN_VDDSDIO, ESP_PD_OPTION_OFF);
-  esp_sleep_pd_config(ESP_PD_DOMAIN_MAX, ESP_PD_OPTION_OFF);           // Number of domains
   esp_light_sleep_start();
 #endif
   //free(BlackImage);
@@ -210,9 +193,17 @@ void setup() {
   pinMode(5, INPUT);  // Battery Voltage
   
   BatteryMode = (digitalRead(4) == LOW);  
-#ifdef USEAPP
-  if (!BatteryMode) Blynk.begin(auth, ssid, pass); //(auth, ssid, pass, IPAddress(139,59,206,133), 8080);
-#endif 
+#ifdef WIFI
+  if (!BatteryMode) {
+    //if (commingFromDeepSleep) {}
+    /*WiFi.mode(WIFI_STA);
+    WiFi.begin(ssid, password);
+    while (WiFi.status() != WL_CONNECTED) delay(500);*/
+    wifiManager.setConfigPortalBlocking(false);
+    wifiManager.autoConnect("CO2Sensor");
+  }
+#endif
+
   strip.begin();
   if (!BatteryMode && commingFromDeepSleep) {
     delay(10);
@@ -220,16 +211,16 @@ void setup() {
     scd4x.stopPeriodicMeasurement();   // stop low power measurement
     scd4x.setTemperatureOffset(tempOffset);
     scd4x.startPeriodicMeasurement();
-    goto_light_sleep(4000); // Wait for co2 measurement
-    //delay(5000);
+    /* Wait for co2 measurement */
+    goto_light_sleep(4000); 
   }
 }
 
 void loop(){
   BatteryMode = (digitalRead(4) == LOW); //check again in USB Power mode
   Paint_Clear(WHITE);
-#ifdef USEAPP
-  if (!BatteryMode) Blynk.run(); 
+#ifdef WIFI
+  if (!BatteryMode) wifiManager.process();
 #endif
 
   uint16_t dataReady;
@@ -278,16 +269,29 @@ void loop(){
     strip.show();
   }
       
-#ifdef USEAPP
+#ifdef WIFI
   if(!error && !BatteryMode) {
-    if (refreshes % 6 == 1) {  //0, 6, 12
-      Blynk.virtualWrite(V5, co2);
-      Blynk.virtualWrite(V6, temperature);
-      Blynk.virtualWrite(V7, humidity);
-      sendNotifications(co2);
+    if (WiFi.status() == WL_CONNECTED) {
+      String payload = "{\"wifi\":" + String(WiFi.RSSI()) + ",";
+      payload=payload+"\"pm02\":" + "100";
+      payload=payload+",";
+      payload=payload+"\"rco2\":" + String(co2);
+      payload=payload+",";
+      payload=payload+"\"atmp\":" + String(temperature) +   ",\"rhum\":" + String(humidity);
+      payload=payload+"}";
+  
+      String APIROOT = "http://10.0.0.4:9925/";
+      String POSTURL = APIROOT + "sensors/airgradient:" + "1995c6" + "/measures";
+      WiFiClient client;
+      HTTPClient http;
+      http.begin(client, POSTURL);
+      http.addHeader("content-type", "application/json");
+      int httpCode = http.POST(payload);
+      String response = http.getString();
+      http.end();
     }
   }
-#endif    
+#endif
 
   /* Print Battery % */  
   if (BatteryMode) {

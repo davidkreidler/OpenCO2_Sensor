@@ -44,7 +44,7 @@
 /**
  * GPIO config
 **/
-#define EPD_SCK_PIN  41
+#define EPD_SCK_PIN  41 //CLK
 #define EPD_MOSI_PIN 21 //DIN
 #define EPD_CS_PIN   42
 #define EPD_RST_PIN  7
