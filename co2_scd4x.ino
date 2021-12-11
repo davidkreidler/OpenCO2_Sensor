@@ -129,7 +129,6 @@ void lowBatteryMode() {
   EPD_1IN54_V2_Init();
   EPD_1IN54_V2_Display(BlackImage);
   EPD_1IN54_V2_DisplayPartBaseImage(BlackImage);
-  EPD_1IN54_V2_DisplayPart(BlackImage); // sonst grauer schleier
   EPD_1IN54_V2_Sleep();
 
   esp_sleep_enable_ext0_wakeup((gpio_num_t)4,1);
@@ -234,28 +233,33 @@ void loop(){
   }
 
   // Read co2 Measurement
-  uint16_t new_co2;
-  float temperature;
-  float humidity;
+  uint16_t new_co2 = 0;
+  float temperature = 0.0f;
+  float humidity = 0.0f;
   uint16_t error = scd4x.readMeasurement(new_co2, temperature, humidity);
   if (error) {
     char errorMessage[256];
     errorToString(error, errorMessage, 256);
     Paint_DrawString_EN(5, 40, errorMessage, &Font20, WHITE,BLACK);
   } else {
+     /* dont update in Battery mode, unless co2 is +- 10 ppm different */
+    if (BatteryMode && new_co2 < co2+10 && new_co2 > co2-10) goto_deep_sleep();
     if (new_co2 > 400) co2 = new_co2;
-    /* CO2 */
-    if (co2 < 1000) Paint_DrawNum(30, 65, co2, &bahn_big, BLACK, WHITE);
-    else            Paint_DrawNum( 6, 65, co2, &bahn_big, BLACK, WHITE);
+    
+    /* co2 */
+    if      (co2 > 9999) Paint_DrawNum(27, 78, co2, &bahn_mid, BLACK, WHITE);
+    else if (co2 < 1000) Paint_DrawNum(30, 65, co2, &bahn_big, BLACK, WHITE);
+    else                 Paint_DrawNum( 6, 65, co2, &bahn_big, BLACK, WHITE);
     Paint_DrawString_EN(142, 150, "ppmn", &bahn_sml, WHITE, BLACK);
 
     /* temperature */
-    Paint_DrawNum(1, 5, temperature, &bahn_mid, BLACK, WHITE);
+    if (temperature < 10.0f) Paint_DrawNum(30, 5, temperature, &bahn_mid, BLACK, WHITE);
+    else                     Paint_DrawNum( 1, 5, temperature, &bahn_mid, BLACK, WHITE);
     Paint_DrawString_EN(60, 4, "*C", &bahn_sml, WHITE, BLACK);
     Paint_DrawString_EN(60, 32, ",", &bahn_sml, WHITE, BLACK);
-    char nachkommer[2];
-    sprintf(nachkommer, "%d", ((int)(floor(temperature*10))) % 10);
-    Paint_DrawString_EN(71, 27, nachkommer, &bahn_sml, WHITE, BLACK);
+    char decimal[1];
+    sprintf(decimal, "%d", ((int)(temperature*10))%10);
+    Paint_DrawString_EN(71, 27, decimal, &bahn_sml, WHITE, BLACK);
   
     /* humidity */
     Paint_DrawNum(124, 5, humidity, &bahn_mid, BLACK, WHITE);
@@ -325,12 +329,11 @@ void loop(){
     EPD_1IN54_V2_Init();
     EPD_1IN54_V2_Display(BlackImage);
     EPD_1IN54_V2_DisplayPartBaseImage(BlackImage);
-    EPD_1IN54_V2_DisplayPart(BlackImage); // sonst grauer schleier
   } else {
     EPD_1IN54_V2_DisplayPart(BlackImage); // partial update
   }
   EPD_1IN54_V2_Sleep();
-  if (refreshes == 40) {
+  if (refreshes == 720) { // every hour or every six hours on battery
     refreshes = 0; // force full update
   }
   refreshes++;
