@@ -243,7 +243,7 @@ void loop(){
     Paint_DrawString_EN(5, 40, errorMessage, &Font20, WHITE,BLACK);
   } else {
      /* dont update in Battery mode, unless co2 is +- 10 ppm different */
-    if (BatteryMode && new_co2 < co2+10 && new_co2 > co2-10) goto_deep_sleep();
+    if (BatteryMode && commingFromDeepSleep && new_co2 < co2+10 && new_co2 > co2-10) goto_deep_sleep();
     if (new_co2 > 400) co2 = new_co2;
     
     /* co2 */
