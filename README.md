@@ -1,7 +1,23 @@
 # SCD4x_CO2_Sensor_ESP32
-Arduino Repository for an e-paper CO2 Sensor with the ESP32
+Arduino Repository for an e-paper CO2 Sensor with the ESP32-S2
 
 ![alt text](https://github.com/davidkreidler/SCD4x_CO2_Sensor_ESP32/raw/main/pictures/Header.png)
+
+# Flash the binary to the CO2-Sensor
+
+1. Download [esptool.py](https://raw.githubusercontent.com/espressif/esptool/master/esptool.py) into the `binary` folder
+2. Make sure, that the power switch is in the `ON` position (down)
+3. Plug in the USB cable to your PC and the Sensor
+4. Hold the Button on the backside of the CO2 Sensor near the USB-C port and push simultaneously the reset ↪️ Button
+5. Release the reset ↪️ Button first and then the other one
+6. Run the following commands in the `binary` folder
+   port for Windows: `COM7` or Linux: `dev/ttyUSB0`
+```
+$ cd binary
+$ python3 -m pip install pyserial
+$ python3 esptool.py --chip esp32s2 --port [COM7|dev/ttyUSB0] --baud 921600 --before default_reset --after hard_reset write_flash -z --flash_mode dio --flash_freq 80m --flash_size 4MB 0xe000 boot_app0.bin 0x1000 co2_scd4x.ino.bootloader.bin 0x10000 co2_scd4x.ino.bin 0x8000 co2_scd4x.ino.partitions.bin
+```
+7. Afterwards push the reset ↪️ Button
 
 # Installation
 
