@@ -1,3 +1,12 @@
+/*
+   ESP32S2 Dev Module
+   Required Arduino libraries:
+   - esp32 waveshare epd
+   - Adafruit DotStar
+   - Sensirion I2C SCD4x: https://github.com/Sensirion/arduino-i2c-scd4x
+   - WiFiManager: https://github.com/tzapu/WiFiManager
+*/
+
 /* Includes display */
 #include "DEV_Config.h"
 #include "EPD.h"
