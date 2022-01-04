@@ -26,7 +26,6 @@
 #include <WiFiManager.h>
 #include <HTTPClient.h>
 #include <BluetoothSerial.h>
-#include "driver/adc.h"
 #include <esp_wifi.h>
 #include <esp_sleep.h>
 WiFiManager wifiManager;
@@ -214,6 +213,28 @@ void goto_light_sleep(int ms){
   //BlackImage = NULL;
 }
 
+void updateBatteryMode(){
+  BatteryMode = (digitalRead(4) == LOW);
+}
+
+double readBatteryVoltage(){
+  // IO5 measurement was 5210 with 0.0 offset
+  return ((analogRead(5)*3.33)/5084.0) + 0.02;
+}
+
+uint8_t calcBatteryPercentage(double voltage) {
+#ifdef EINK_2IN54V2
+    voltage += 0.11; // offset for type of Battery used
+#endif
+
+  if (voltage <= 3.62)
+    return 75 * pow((voltage-3.2), 2.);
+  else if (voltage <= 4.19)
+    return 2836.9625 * pow(voltage,4) - 43987.4889 * pow(voltage,3) + 255233.8134 * pow(voltage,2) - 656689.7123 * voltage + 632041.7303;
+  else
+    return 100;
+}
+
 void setup() {
   DEV_Module_Init();
 
@@ -226,8 +247,9 @@ void setup() {
   /* power */
   pinMode(4, INPUT);  // usb Power
   pinMode(5, INPUT);  // Battery Voltage
-  
-  BatteryMode = (digitalRead(4) == LOW);  
+
+  updateBatteryMode();
+
 #ifdef WIFI
   if (!BatteryMode) {
     //if (commingFromDeepSleep) {}
@@ -254,8 +276,11 @@ void setup() {
 }
 
 void loop(){
-  BatteryMode = (digitalRead(4) == LOW); //check again in USB Power mode
   Paint_Clear(WHITE);
+
+  //check again in USB Power mode
+  updateBatteryMode();
+
 #ifdef WIFI
   if (!BatteryMode) wifiManager.process();
 #endif
@@ -379,8 +404,7 @@ void loop(){
 
   /* Print Battery % */  
   if (BatteryMode) {
-    float voltage = ((analogRead(5)*3.33)/5084); //IO5 /was 5210
-    voltage += 0.02; //offset measurement
+    double voltage = readBatteryVoltage();
     if (voltage < 3.1) lowBatteryMode();
 
     /*char batteryvolt[8] = "";
@@ -388,21 +412,14 @@ void loop(){
     char volt[10] = "V";
     strcat(batteryvolt, volt);
     Paint_DrawString_EN(100, 180, batteryvolt, &Font20, WHITE, BLACK);*/
-        
-    uint8_t percentage = 100;
-#ifdef EINK_2IN54V2
-    voltage += 0.11; // offset for type of Battery used
-#endif
-    if (voltage <= 3.62) 
-      percentage = 75 * pow((voltage-3.2),2);
-    else if (voltage <= 4.19)
-      percentage = 2836.9625 * pow(voltage,4) - 43987.4889 * pow(voltage,3) + 255233.8134 * pow(voltage,2) - 656689.7123*voltage + 632041.7303; 
+
+    uint8_t percentage = calcBatteryPercentage(voltage);
     
 #ifdef EINK_2IN54V2
     //                  Xstart,Ystart,Xend,Yend
     Paint_DrawRectangle( 15, 145, 120, 169, BLACK, DOT_PIXEL_2X2, DRAW_FILL_EMPTY);
     Paint_DrawRectangle(120, 149, 125, 165, BLACK, DOT_PIXEL_2X2, DRAW_FILL_EMPTY);
-    Paint_DrawRectangle(15, 145, 105*(percentage/100.0)+15, 169, BLACK, DOT_PIXEL_1X1, DRAW_FILL_FULL);
+    Paint_DrawRectangle( 15, 145, 105*(percentage/100.0)+15, 169, BLACK, DOT_PIXEL_1X1, DRAW_FILL_FULL);
 #endif
 #ifdef EINK_4IN2
     Paint_DrawRectangle(225, 10, 330, 34, BLACK, DOT_PIXEL_2X2, DRAW_FILL_EMPTY);
