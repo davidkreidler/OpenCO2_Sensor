@@ -281,6 +281,8 @@ uint16_t error;
 uint16_t new_co2;
 float temperature;
 float humidity;
+
+char decimal[2];
 void loop(){
   Paint_Clear(WHITE);
 
@@ -323,7 +325,7 @@ void loop(){
     else                     Paint_DrawNum( 1, 5, temperature, &bahn_mid, BLACK, WHITE);
     Paint_DrawString_EN(60, 4, "*C", &bahn_sml, WHITE, BLACK);
     Paint_DrawString_EN(60, 32, ",", &bahn_sml, WHITE, BLACK);
-    char decimal[1];
+
     sprintf(decimal, "%d", ((int)(temperature*10))%10);
     Paint_DrawString_EN(71, 27, decimal, &bahn_sml, WHITE, BLACK);
 
