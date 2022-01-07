@@ -8,7 +8,10 @@
    - WiFiManager: https://github.com/tzapu/WiFiManager
 */
 
-/* Includes display */
+/* deep & light sleep */
+#include <esp_sleep.h>
+
+/* eInk display */
 #include "DEV_Config.h"
 #include "EPD.h"
 #include "GUI_Paint.h"
@@ -24,15 +27,20 @@
 #include <EEPROM.h>
 
 /* WIFI */
-//#define WIFI
+#define WIFI    // enable WiFi
+#define INFLUX  // enable influxdb
+
 #ifdef WIFI
 #include <WiFi.h>
+
+// WiFi manager
+#include <DNSServer.h>
+#include <WebServer.h>
 #include <WiFiManager.h>
+
+// Update database
+#include "time.h"
 #include <HTTPClient.h>
-#include <BluetoothSerial.h>
-#include <esp_wifi.h>
-#include <esp_sleep.h>
-WiFiManager wifiManager;
 #endif
 
 /* led */
@@ -60,10 +68,79 @@ RTC_DATA_ATTR int HWSubRev = 1; //default only
 RTC_DATA_ATTR uint16_t sensorStatus;
 #endif
 
-#ifdef WIFI
-#define tempOffset 13.0
+#ifndef WIFI
+#define tempOffset       4.4 // was 5.8
 #else
-#define tempOffset 4.4 // was 5.8
+#define tempOffset      13.0
+#define WIFI_RETRY_MAX  20
+#define WIFI_TIMEOUT    10000
+
+bool wifi_ready = false;
+RTC_DATA_ATTR bool wifi_init = false;
+RTC_DATA_ATTR int wifi_retry_count = 0;
+RTC_DATA_ATTR unsigned long wifi_retry_time = 0;
+RTC_DATA_ATTR bool tic = true;
+
+const char* ntpServer = "pool.ntp.org";   // NTP server to request epoch time
+const char* hostname = "CO2Sensor";
+WiFiManager wifiManager;
+
+unsigned long getTime() {
+  time_t now;
+  struct tm timeinfo;
+  if (!getLocalTime(&timeinfo)) {
+    return(0);
+  }
+  time(&now);
+  return now;
+}
+
+void WiFiStationConnected(arduino_event_id_t event, arduino_event_info_t info) {
+  if (!wifi_ready) configTime(0, 0, ntpServer);
+  wifi_ready = true;
+}
+
+void WiFiStationDisconnected(arduino_event_id_t event, arduino_event_info_t info) {
+  wifi_ready = false;
+  wifi_retry_count = 0;
+}
+
+void wifi_setup() {
+  WiFi.setHostname(hostname);
+
+  WiFi.onEvent(WiFiStationConnected, ARDUINO_EVENT_WIFI_STA_GOT_IP);  // ARDUINO_EVENT_WIFI_STA_CONNECTED
+  WiFi.onEvent(WiFiStationDisconnected, ARDUINO_EVENT_WIFI_STA_DISCONNECTED);
+  WiFi.onEvent(WiFiStationDisconnected, ARDUINO_EVENT_WIFI_STA_LOST_IP);
+
+  wifiManager.setConfigPortalBlocking(false);
+  wifiManager.autoConnect(hostname);
+
+  wifi_init = true;
+}
+
+void wifi_disable() {
+  wifi_init = false;
+
+  //WiFi.setSleep(true);
+  WiFi.disconnect(true);  // Disconnect from the network
+  WiFi.mode(WIFI_OFF);    // Switch WiFi off
+}
+
+void wifi_reconnect() {
+  if (wifi_retry_count < WIFI_RETRY_MAX && (millis()-wifi_retry_time) > WIFI_TIMEOUT) {
+    if ((WiFi.status() != WL_CONNECTED) && (WiFi.getMode() & WIFI_MODE_STA)) {
+      wifi_retry_count++;
+      wifi_retry_time = millis();
+
+      if (WiFi.reconnect()) {
+        if (WiFi.status() == WL_CONNECTED) wifi_retry_count = 0;
+      } else if (wifi_retry_count == WIFI_RETRY_MAX) {
+        wifi_disable();
+      }
+    }
+  }
+}
+
 #endif
 
 void displayWelcome() {
@@ -221,9 +298,7 @@ void lowBatteryMode() {
 
 void goto_deep_sleep(int ms) {
 #ifdef WIFI
-  //WiFi.setSleep(true);
-  WiFi.disconnect(true);  // Disconnect from the network
-  WiFi.mode(WIFI_OFF);    // Switch WiFi off
+  if (wifi_init) wifi_disable();
 #endif
   esp_sleep_enable_ext0_wakeup((gpio_num_t)4, 1);
   esp_sleep_enable_timer_wakeup(ms * 1000);                             // periodic measurement every 30 sec - 0.83 sec awake
@@ -304,17 +379,6 @@ void setup() {
   pinMode(5, INPUT);  // Battery Voltage
   updateBatteryMode();
 
-#ifdef WIFI
-  if (!BatteryMode) {
-    //if (comingFromDeepSleep) {}
-    /*WiFi.mode(WIFI_STA);
-    WiFi.begin(ssid, password);
-    while (WiFi.status() != WL_CONNECTED) delay(500);*/
-    wifiManager.setConfigPortalBlocking(false);
-    wifiManager.autoConnect("CO2Sensor");
-  }
-#endif
-
   strip.begin();
   if (esp_sleep_get_wakeup_cause() == ESP_SLEEP_WAKEUP_EXT1) {
     LEDalwaysOn = !LEDalwaysOn;
@@ -336,15 +400,61 @@ uint16_t new_co2 = 0;
 float temperature = 0.0f;
 float humidity = 0.0f;
 
+char decimal[2];
+
+#ifdef WIFI
+
+WiFiClient client;
+HTTPClient http;
+
+#ifdef INFLUX
+const String host = "192.168.178.28";
+const uint16_t port = 8086;
+const String url = "/write?db=scd4x&precision=s";
+const bool https = true;
+const String ctype = "text/plain";
+#elif
+const String host = "10.0.0.4";
+const uint16_t port = 9925;
+const String url = "/sensors/airgradient:1995c6/measures";
+const bool https = false;
+const String ctype = "application/json";
+#endif
+
+int update_database() {
+  #ifdef INFLUX
+  String payload = "sensor ";
+  payload += "rssi=" + String(WiFi.RSSI()) + ",";
+  payload += "ip=" + String(WiFi.localIP()) + ",";
+  payload += "co2=" + String(co2) + ",";
+  payload += "temperature=" + String(temperature) +   ",";
+  payload += "humidity=" + String(humidity) + " " + String(getTime(), DEC);
+  #elif
+  String payload = "{";
+  payload += "\"wifi\":" + String(WiFi.RSSI()) + ",";
+  payload += "\"pm02\":" + "100" + ",";
+  payload += "\"rco2\":" + String(co2) + ",";
+  payload += "\"atmp\":" + String(temperature) + ",";
+  payload += "\"rhum\":" + String(humidity);
+  payload += "}";
+  #endif
+
+  http.begin(client, host, port, url, https);
+  http.addHeader("content-type", ctype);
+  http.POST(payload);
+  int httpCode = http.POST(payload);
+  // String response = http.getString();
+  http.end();
+
+  return httpCode;
+}
+#endif
+
 void loop() {
   Paint_Clear(WHITE);
 
   // check again in USB Power mode
   updateBatteryMode();
-
-#ifdef WIFI
-  if (!BatteryMode) wifiManager.process();
-#endif
 
   bool isDataReady = false;
   uint16_t ready_error = scd4x.getDataReadyFlag(isDataReady);
@@ -389,7 +499,6 @@ void loop() {
 #endif
     Paint_DrawString_EN(60+offset, 4, unit, &bahn_sml, WHITE, BLACK);
     Paint_DrawString_EN(60+offset, 32, ",", &bahn_sml, WHITE, BLACK);
-    char decimal[2];
     sprintf(decimal, "%d", ((int)(temperature * 10)) % 10);
     Paint_DrawString_EN(71+offset, 27, decimal, &bahn_sml, WHITE, BLACK);
 
@@ -429,7 +538,6 @@ void loop() {
     Paint_DrawString_EN(140, 220, "*C", &bahn_sml, WHITE, BLACK);
     Paint_DrawLine(137, 287, 137, 287, BLACK, DOT_PIXEL_4X4, LINE_STYLE_SOLID);
 
-    char decimal[1];
     sprintf(decimal, "%d", ((int)(temperature * 10)) % 10);
     Paint_DrawString_EN(145, 247, decimal, &bahn_mid, WHITE, BLACK);
 
@@ -438,30 +546,6 @@ void loop() {
     Paint_DrawString_EN(340, 220, "%", &bahn_sml, WHITE, BLACK);
 #endif
   }
-
-#ifdef WIFI
-  if (!error && !BatteryMode) {
-    if (WiFi.status() == WL_CONNECTED) {
-      String payload = "{\"wifi\":" + String(WiFi.RSSI()) + ",";
-      payload=payload+"\"pm02\":" + "100";
-      payload=payload+",";
-      payload=payload+"\"rco2\":" + String(co2);
-      payload=payload+",";
-      payload=payload+"\"atmp\":" + String(temperature) +   ",\"rhum\":" + String(humidity);
-      payload=payload+"}";
-
-      String APIROOT = "http://10.0.0.4:9925/";
-      String POSTURL = APIROOT + "sensors/airgradient:" + "1995c6" + "/measures";
-      WiFiClient client;
-      HTTPClient http;
-      http.begin(client, POSTURL);
-      http.addHeader("content-type", "application/json");
-      int httpCode = http.POST(payload);
-      String response = http.getString();
-      http.end();
-    }
-  }
-#endif
 
 #ifdef TEST_MODE
   double voltage = readBatteryVoltage();
@@ -495,7 +579,6 @@ void loop() {
     if (voltage < 3.1) lowBatteryMode();
     uint8_t percentage = calcBatteryPercentage(voltage);
 
-
 #ifdef EINK_1IN54V2
                   // Xstart,Ystart,Xend,Yend
     Paint_DrawRectangle( 15, 145, 120, 169, BLACK, DOT_PIXEL_2X2, DRAW_FILL_EMPTY);
@@ -513,6 +596,29 @@ void loop() {
     strcat(batterpercent, percent);
     Paint_DrawString_EN(342, 10, batterpercent, &bahn_sml, WHITE, BLACK);
 #endif
+  } else {
+    #ifdef WIFI
+    int ret = 0;
+
+    if (!wifi_init) {
+      wifi_setup();
+    } else {
+      wifiManager.process();
+
+      if (!error && (WiFi.status() == WL_CONNECTED) && wifi_ready) ret = update_database();
+
+      wifi_reconnect();
+    }
+
+    String wifi_status = "WiFi " + String((WiFi.status() == WL_CONNECTED)? (String(WiFi.RSSI()) + "dBm"):"off");
+    Paint_DrawString_EN(5, 150, wifi_status.c_str(), &Font16, WHITE, BLACK);
+
+    if (ret != 0) {
+      String str_ready = "Update " + String(ret) + String(tic ? "":" .");
+      Paint_DrawString_EN(5, 170, str_ready.c_str(), &Font16, WHITE, BLACK);
+      tic = !tic;
+    }
+    #endif
   }
 #endif /* TEST_MODE */
 
