@@ -275,6 +275,12 @@ void setup() {
   }
 }
 
+uint16_t dataReady;
+uint16_t error;
+
+uint16_t new_co2;
+float temperature;
+float humidity;
 void loop(){
   Paint_Clear(WHITE);
 
@@ -285,9 +291,8 @@ void loop(){
   if (!BatteryMode) wifiManager.process();
 #endif
 
-  uint16_t dataReady;
-  uint16_t ready_error = scd4x.getDataReadyStatus(dataReady);
-  if (ready_error || !(((dataReady | (~dataReady + 1)) >> 11) & 1)) {
+  error = scd4x.getDataReadyStatus(dataReady);
+  if (error || !(((dataReady | (~dataReady + 1)) >> 11) & 1)) {
     //Least significant 11 bits are 0 -> data not ready
     if (BatteryMode) goto_deep_sleep();
     else goto_light_sleep(4000);
@@ -295,10 +300,7 @@ void loop(){
   }
 
   // Read co2 Measurement
-  uint16_t new_co2 = 0;
-  float temperature = 0.0f;
-  float humidity = 0.0f;
-  uint16_t error = scd4x.readMeasurement(new_co2, temperature, humidity);
+  error = scd4x.readMeasurement(new_co2, temperature, humidity);
   if (error) {
     char errorMessage[256];
     errorToString(error, errorMessage, 256);
