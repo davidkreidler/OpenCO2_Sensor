@@ -303,17 +303,18 @@ void loop(){
     voltage += 0.02; //offset measurement
     if (voltage < 3.1) lowBatteryMode();
 
-    char batteryvolt[8] = "";
+    /*char batteryvolt[8] = "";
     dtostrf(voltage, 1, 3, batteryvolt);
     char volt[10] = "V";
     strcat(batteryvolt, volt);
-    //Paint_DrawString_EN(100, 180, batteryvolt, &Font20, WHITE, BLACK);
+    Paint_DrawString_EN(100, 180, batteryvolt, &Font20, WHITE, BLACK);*/
         
-    uint8_t percentage = 0;
-    if (voltage <= 3.61) percentage = 46 * pow((voltage-3.1),2);
-    else if (voltage > 4.19) percentage = 100;
-    //else percentage = 2808.3808*pow(voltage,4) - 43560.9157*pow(voltage,3) + 252848.5888*pow(voltage,2) - 650767.4615*voltage + 626532.5703;
-    else percentage = 2836.9625 * pow(voltage,4) - 43987.4889 * pow(voltage,3) + 255233.8134 * pow(voltage,2) - 656689.7123*voltage + 632041.7303; 
+    uint8_t percentage = 100;
+    voltage += 0.11; // offset for type of Battery used
+    if (voltage <= 3.62) 
+      percentage = 75 * pow((voltage-3.2),2);
+    else if (voltage <= 4.19)
+      percentage = 2836.9625 * pow(voltage,4) - 43987.4889 * pow(voltage,3) + 255233.8134 * pow(voltage,2) - 656689.7123*voltage + 632041.7303; 
     
     //                  Xstart,Ystart,Xend,Yend
     Paint_DrawRectangle( 15, 145, 120, 169, BLACK, DOT_PIXEL_2X2, DRAW_FILL_EMPTY);
