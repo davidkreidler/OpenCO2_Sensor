@@ -120,14 +120,14 @@ void initOnce() {
   initDone = true;
 }
 
-void setLED(uint16_t co2) {
+void setLED(uint16_t co2_value) {
   int red = 0, green = 0, blue = 0;
 
-  if (co2 > 2000) {
+  if (co2_value > 2000) {
     red = 216; green = 2; blue = 131; //magenta
   } else {
-    red   =   pow((co2-400),2)/10000;       //= 0.13 * co2 - 90;
-    green = - pow((co2-400),2)/4500 + 255;  //-0.21 * co2 + 318;
+    red   =   pow((co2_value-400),2)/10000;       //= 0.13 * co2 - 90;
+    green = - pow((co2_value-400),2)/4500 + 255;  //-0.21 * co2 + 318;
   }
   if (red < 0) red = 0;
   if (red > 255) red = 255;
