@@ -16,11 +16,11 @@
 
 #include <Wire.h>
 
-#define USE_DEBUG 1
+#define USE_DEBUG 0
 #if USE_DEBUG
 	#define Debug(__info) Serial.print(__info)
 #else
-	#define Debug(__info)  
+	#define Debug(__info)
 #endif
 
 #endif
