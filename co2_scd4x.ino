@@ -14,7 +14,7 @@
 #include "GUI_Paint.h"
 #include <stdlib.h>
 #include "init.h"
-#define EINK_2IN54V2
+#define EINK_1IN54V2
 //#define EINK_4IN2
 
 /* welcome */
@@ -36,6 +36,7 @@ WiFiManager wifiManager;
 #include <Adafruit_DotStar.h>
 #include <SPI.h>
 Adafruit_DotStar strip(1, 40, 39, DOTSTAR_BRG); // numLEDs, DATAPIN, CLOCKPIN
+#include "driver/rtc_io.h"
 
 /* scd4x */
 #include <Arduino.h>
@@ -47,9 +48,10 @@ RTC_DATA_ATTR bool initDone = false;
 RTC_DATA_ATTR int refreshes = 1;
 RTC_DATA_ATTR UBYTE *BlackImage;
 RTC_DATA_ATTR bool BatteryMode = false;
-RTC_DATA_ATTR bool commingFromDeepSleep = false;
+RTC_DATA_ATTR bool comingFromDeepSleep = false;
 RTC_DATA_ATTR int ledbrightness = 5;
 RTC_DATA_ATTR uint16_t co2 = 400;
+RTC_DATA_ATTR bool LEDalwaysOn = false;
 
 #ifdef WIFI
 #define tempOffset 13.0
@@ -58,7 +60,7 @@ RTC_DATA_ATTR uint16_t co2 = 400;
 #endif
 
 void displayWelcome() {
-#ifdef EINK_2IN54V2
+#ifdef EINK_1IN54V2
   Paint_DrawBitMap(gImage_welcome);
   EPD_1IN54_V2_Display(BlackImage);
   EPD_1IN54_V2_Sleep();
@@ -82,7 +84,7 @@ void displayWelcome() {
 }
 
 void initOnce() {
-#ifdef EINK_2IN54V2
+#ifdef EINK_1IN54V2
   BlackImage = (UBYTE *)malloc(5000);
   Paint_NewImage(BlackImage, EPD_1IN54_V2_WIDTH, EPD_1IN54_V2_HEIGHT, 270, WHITE);
   EPD_1IN54_V2_Init();
@@ -94,9 +96,9 @@ void initOnce() {
 #endif
   Paint_Clear(WHITE);
 
-  EEPROM.begin(1); //EEPROM_SIZE
+  EEPROM.begin(1); // EEPROM_SIZE
   int welcomeDone = EEPROM.read(0);
-  if(welcomeDone != 1) displayWelcome();
+  if (welcomeDone != 1) displayWelcome();
 
   scd4x.stopPeriodicMeasurement(); // stop potentially previously started measurement
   scd4x.setSensorAltitude(50);     // Berlin: 50m über NN
@@ -104,7 +106,7 @@ void initOnce() {
   scd4x.setTemperatureOffset(tempOffset);
   scd4x.startPeriodicMeasurement();
 
-#ifdef EINK_2IN54V2
+#ifdef EINK_1IN54V2
   Paint_DrawBitMap(gImage_init);
   EPD_1IN54_V2_Display(BlackImage);
   EPD_1IN54_V2_Sleep();
@@ -119,13 +121,19 @@ void initOnce() {
 }
 
 void setLED(uint16_t co2_value) {
+  if (BatteryMode && !LEDalwaysOn) {
+    strip.clear();
+    strip.show();
+    return;
+  }
+
   int red = 0, green = 0, blue = 0;
 
   if (co2_value > 2000) {
-    red = 216; green = 2; blue = 131; //magenta
+    red = 216; green = 2; blue = 131; // magenta
   } else {
-    red   =   pow((co2_value-400),2)/10000;
-    green = - pow((co2_value-400),2)/4500 + 255;
+    red   =   pow((co2_value - 400), 2) / 10000;
+    green = - pow((co2_value - 400), 2) / 4500 + 255;
   }
   if (red < 0) red = 0;
   if (red > 255) red = 255;
@@ -134,9 +142,9 @@ void setLED(uint16_t co2_value) {
   if (blue < 0) blue = 0;
   if (blue > 255) blue = 255;
 
-  red = (int)(red * (ledbrightness/100.0));
-  green = (int)(green * (ledbrightness/100.0));
-  blue = (int)(blue * (ledbrightness/100.0));
+  red =   (int)(red   * (ledbrightness / 100.0));
+  green = (int)(green * (ledbrightness / 100.0));
+  blue =  (int)(blue  * (ledbrightness / 100.0));
 
   strip.setPixelColor(0, green, red, blue);
   strip.show();
@@ -147,14 +155,14 @@ void lowBatteryMode() {
   scd4x.powerDown();
   refreshes = 1;
   Paint_Clear(BLACK);
-                    //Xstart,Ystart,Xend,Yend
+                // Xstart,Ystart,Xend,Yend
   Paint_DrawRectangle( 50,  40, 150, 90, WHITE, DOT_PIXEL_3X3, DRAW_FILL_EMPTY);
   Paint_DrawRectangle(150,  55, 160, 75, WHITE, DOT_PIXEL_1X1, DRAW_FILL_FULL);
   Paint_DrawLine(      60, 100, 140, 30, WHITE, DOT_PIXEL_3X3, LINE_STYLE_SOLID);
   Paint_DrawString_EN(45, 120, "Batterie", &Font20, BLACK, WHITE);
   Paint_DrawString_EN(45, 145, "aufladen", &Font20, BLACK, WHITE);
 
-#ifdef EINK_2IN54V2
+#ifdef EINK_1IN54V2
   EPD_1IN54_V2_Init();
   EPD_1IN54_V2_Display(BlackImage);
   EPD_1IN54_V2_DisplayPartBaseImage(BlackImage);
@@ -166,7 +174,7 @@ void lowBatteryMode() {
   EPD_4IN2_Sleep();
 #endif
 
-  esp_sleep_enable_ext0_wakeup((gpio_num_t)4,1);
+  esp_sleep_enable_ext0_wakeup((gpio_num_t)4, 1);
   esp_sleep_pd_config(ESP_PD_DOMAIN_RTC_PERIPH, ESP_PD_OPTION_AUTO);   // RTC IO, sensors and ULP co-processor
   esp_sleep_pd_config(ESP_PD_DOMAIN_RTC_SLOW_MEM, ESP_PD_OPTION_AUTO); // RTC slow memory: auto
   esp_sleep_pd_config(ESP_PD_DOMAIN_RTC_FAST_MEM, ESP_PD_OPTION_OFF);  // RTC fast memory
@@ -182,8 +190,8 @@ void goto_deep_sleep(int ms) {
   WiFi.disconnect(true);  // Disconnect from the network
   WiFi.mode(WIFI_OFF);    // Switch WiFi off
 #endif
-  esp_sleep_enable_ext0_wakeup((gpio_num_t)4,1);
-  esp_sleep_enable_timer_wakeup(ms*1000);                               // periodic measurement every 30 sec - 0.83 sec awake
+  esp_sleep_enable_ext0_wakeup((gpio_num_t)4, 1);
+  esp_sleep_enable_timer_wakeup(ms * 1000);                             // periodic measurement every 30 sec - 0.83 sec awake
   esp_sleep_pd_config(ESP_PD_DOMAIN_RTC_PERIPH, ESP_PD_OPTION_AUTO);    // RTC IO, sensors and ULP co-processor
   esp_sleep_pd_config(ESP_PD_DOMAIN_RTC_SLOW_MEM, ESP_PD_OPTION_AUTO);  // RTC slow memory: auto
   esp_sleep_pd_config(ESP_PD_DOMAIN_RTC_FAST_MEM, ESP_PD_OPTION_OFF);   // RTC fast memory
@@ -191,16 +199,21 @@ void goto_deep_sleep(int ms) {
   esp_sleep_pd_config(ESP_PD_DOMAIN_RTC8M, ESP_PD_OPTION_OFF);          // CPU core
   esp_sleep_pd_config(ESP_PD_DOMAIN_VDDSDIO, ESP_PD_OPTION_OFF);
 
-  commingFromDeepSleep = true;
+  /* Wakeup by IO0 button */
+  rtc_gpio_pullup_en((gpio_num_t)0);
+  rtc_gpio_pulldown_dis((gpio_num_t)0);
+  esp_sleep_enable_ext1_wakeup((uint64_t)0x1, ESP_EXT1_WAKEUP_ALL_LOW);
+
+  comingFromDeepSleep = true;
   esp_deep_sleep_start();
 }
 
-void goto_light_sleep(int ms){
-  commingFromDeepSleep = false;
+void goto_light_sleep(int ms) {
+  comingFromDeepSleep = false;
 #ifdef WIFI
   delay(ms);
 #else
-  esp_sleep_enable_timer_wakeup(ms*1000);                               // periodic measurement every 5 sec -1.1 sec awake
+  esp_sleep_enable_timer_wakeup(ms * 1000);                             // periodic measurement every 5 sec -1.1 sec awake
   esp_sleep_pd_config(ESP_PD_DOMAIN_RTC_PERIPH, ESP_PD_OPTION_ON);      // RTC IO, sensors and ULP co-processor
   esp_sleep_pd_config(ESP_PD_DOMAIN_RTC_SLOW_MEM, ESP_PD_OPTION_AUTO);  // RTC slow memory: auto
   esp_sleep_pd_config(ESP_PD_DOMAIN_RTC_FAST_MEM, ESP_PD_OPTION_OFF);   // RTC fast memory
@@ -213,24 +226,24 @@ void goto_light_sleep(int ms){
   //BlackImage = NULL;
 }
 
-void updateBatteryMode(){
+void updateBatteryMode() {
   BatteryMode = (digitalRead(4) == LOW);
 }
 
-double readBatteryVoltage(){
+double readBatteryVoltage() {
   // IO5 measurement was 5210 with 0.0 offset
-  return ((analogRead(5)*3.33)/5084.0) + 0.02;
+  return ((analogRead(5) * 3.33) / 5084.0) + 0.02;
 }
 
 uint8_t calcBatteryPercentage(double voltage) {
-#ifdef EINK_2IN54V2
-    voltage += 0.11; // offset for type of Battery used
+#ifdef EINK_1IN54V2
+  voltage += 0.11; // offset for type of Battery used
 #endif
 
   if (voltage <= 3.62)
-    return 75 * pow((voltage-3.2), 2.);
+    return 75 * pow((voltage - 3.2), 2.);
   else if (voltage <= 4.19)
-    return 2836.9625 * pow(voltage,4) - 43987.4889 * pow(voltage,3) + 255233.8134 * pow(voltage,2) - 656689.7123 * voltage + 632041.7303;
+    return 2836.9625 * pow(voltage, 4) - 43987.4889 * pow(voltage, 3) + 255233.8134 * pow(voltage, 2) - 656689.7123 * voltage + 632041.7303;
   else
     return 100;
 }
@@ -239,7 +252,7 @@ void setup() {
   DEV_Module_Init();
 
   /* scd4x */
-  Wire.begin(33,34); // grün, gelb
+  Wire.begin(33, 34); // grün, gelb
   scd4x.begin(Wire);
 
   if (!initDone) initOnce();
@@ -251,7 +264,7 @@ void setup() {
 
 #ifdef WIFI
   if (!BatteryMode) {
-    //if (commingFromDeepSleep) {}
+    //if (comingFromDeepSleep) {}
     /*WiFi.mode(WIFI_STA);
     WiFi.begin(ssid, password);
     while (WiFi.status() != WL_CONNECTED) delay(500);*/
@@ -261,7 +274,13 @@ void setup() {
 #endif
 
   strip.begin();
-  if (!BatteryMode && commingFromDeepSleep) {
+  if (esp_sleep_get_wakeup_cause() == ESP_SLEEP_WAKEUP_EXT1) {
+    LEDalwaysOn = !LEDalwaysOn;
+    setLED(co2);
+    delay(1000);
+  }
+
+  if (!BatteryMode && comingFromDeepSleep) {
     delay(10);
     setLED(co2);
 
@@ -278,10 +297,10 @@ uint16_t new_co2 = 0;
 float temperature = 0.0f;
 float humidity = 0.0f;
 
-void loop(){
+void loop() {
   Paint_Clear(WHITE);
 
-  //check again in USB Power mode
+  // check again in USB Power mode
   updateBatteryMode();
 
 #ifdef WIFI
@@ -293,7 +312,7 @@ void loop(){
   if (ready_error || !isDataReady) {
     if (BatteryMode) goto_deep_sleep(29000);
     else goto_light_sleep(4000);
-    return; //otherwise continues running... why?
+    return; // otherwise continues running!
   }
 
   // Read co2 Measurement
@@ -304,10 +323,11 @@ void loop(){
     Paint_DrawString_EN(5, 40, errorMessage, &Font20, WHITE, BLACK);
   } else {
     /* dont update in Battery mode, unless co2 is +- 10 ppm different */
-    if (BatteryMode && commingFromDeepSleep && (abs(new_co2-co2)<10)) goto_deep_sleep(29000);
+    if (BatteryMode && comingFromDeepSleep && (abs(new_co2 - co2) < 10)) goto_deep_sleep(29000);
     if (new_co2 > 400) co2 = new_co2;
+    setLED(co2);
 
-#ifdef EINK_2IN54V2
+#ifdef EINK_1IN54V2
     /* co2 */
     if      (co2 > 9999) Paint_DrawNum(27, 78, co2, &bahn_mid, BLACK, WHITE);
     else if (co2 < 1000) Paint_DrawNum(30, 65, co2, &bahn_big, BLACK, WHITE);
@@ -320,7 +340,7 @@ void loop(){
     Paint_DrawString_EN(60, 4, "*C", &bahn_sml, WHITE, BLACK);
     Paint_DrawString_EN(60, 32, ",", &bahn_sml, WHITE, BLACK);
     char decimal[2];
-    sprintf(decimal, "%d", ((int)(temperature*10))%10);
+    sprintf(decimal, "%d", ((int)(temperature * 10)) % 10);
     Paint_DrawString_EN(71, 27, decimal, &bahn_sml, WHITE, BLACK);
 
     /* humidity */
@@ -329,14 +349,14 @@ void loop(){
 #endif
 #ifdef EINK_4IN2
     /* co2 */
-                                     //Xstart,Ystart
+                                 // Xstart,Ystart
     if      (co2 > 9999) Paint_DrawNum(102, 88, co2, &bahn_big, BLACK, WHITE);
     else if (co2 < 1000) Paint_DrawNum(196, 88, co2, &bahn_big, BLACK, WHITE);
     else                 Paint_DrawNum(149, 88, co2, &bahn_big, BLACK, WHITE);
     Paint_DrawString_EN(337, 143, "ppmn", &bahn_sml, WHITE, BLACK);
 
     /* devider lines */
-              //Xstart,Ystart,Xend,Yend
+             // Xstart,Ystart,Xend,Yend
     Paint_DrawLine( 10, 210, 390, 210, BLACK, DOT_PIXEL_3X3, LINE_STYLE_SOLID);
     Paint_DrawLine(200, 210, 200, 290, BLACK, DOT_PIXEL_3X3, LINE_STYLE_SOLID);
 
@@ -347,7 +367,7 @@ void loop(){
     Paint_DrawLine(112, 109, 112, 171, BLACK, DOT_PIXEL_3X3, LINE_STYLE_SOLID); //right
     Paint_DrawLine( 27, 171, 112, 171, BLACK, DOT_PIXEL_3X3, LINE_STYLE_SOLID); //button
     Paint_DrawLine( 99,  70,  99,  91, BLACK, DOT_PIXEL_5X5, LINE_STYLE_SOLID); //chimney
-                      //X_Center,Y_Center,radius
+                 // XCenter,YCenter,radius
     Paint_DrawCircle(    54, 132,  16, BLACK, DOT_PIXEL_3X3, DRAW_FILL_EMPTY);      //C
     Paint_DrawRectangle( 58, 112,  72, 152, WHITE, DOT_PIXEL_1X1, DRAW_FILL_FULL);  //C
     Paint_DrawCircle(    80, 132,  16, BLACK, DOT_PIXEL_3X3, DRAW_FILL_EMPTY);      //O
@@ -360,7 +380,7 @@ void loop(){
     Paint_DrawLine(137, 287, 137, 287, BLACK, DOT_PIXEL_4X4, LINE_STYLE_SOLID);
 
     char decimal[1];
-    sprintf(decimal, "%d", ((int)(temperature*10))%10);
+    sprintf(decimal, "%d", ((int)(temperature * 10)) % 10);
     Paint_DrawString_EN(145, 247, decimal, &bahn_mid, WHITE, BLACK);
 
     /* humidity */
@@ -369,15 +389,8 @@ void loop(){
 #endif
   }
 
-  if (!BatteryMode) {
-    setLED(co2);
-  } else if (!commingFromDeepSleep) {
-    strip.clear();
-    strip.show();
-  }
-
 #ifdef WIFI
-  if(!error && !BatteryMode) {
+  if (!error && !BatteryMode) {
     if (WiFi.status() == WL_CONNECTED) {
       String payload = "{\"wifi\":" + String(WiFi.RSSI()) + ",";
       payload=payload+"\"pm02\":" + "100";
@@ -412,15 +425,15 @@ void loop(){
     strcat(batteryvolt, volt);
     Paint_DrawString_EN(100, 180, batteryvolt, &Font20, WHITE, BLACK);*/
 
-#ifdef EINK_2IN54V2
-    //                  Xstart,Ystart,Xend,Yend
+#ifdef EINK_1IN54V2
+                  // Xstart,Ystart,Xend,Yend
     Paint_DrawRectangle( 15, 145, 120, 169, BLACK, DOT_PIXEL_2X2, DRAW_FILL_EMPTY);
     Paint_DrawRectangle(120, 149, 125, 165, BLACK, DOT_PIXEL_2X2, DRAW_FILL_EMPTY);
     Paint_DrawRectangle( 15, 145, 105*(percentage/100.0)+15, 169, BLACK, DOT_PIXEL_1X1, DRAW_FILL_FULL);
 #endif
 #ifdef EINK_4IN2
     Paint_DrawRectangle(225, 10, 330, 34, BLACK, DOT_PIXEL_2X2, DRAW_FILL_EMPTY);
-    Paint_DrawRectangle(330, 14, 335, 30, BLACK, DOT_PIXEL_2X2, DRAW_FILL_EMPTY); //nippel
+    Paint_DrawRectangle(330, 14, 335, 30, BLACK, DOT_PIXEL_2X2, DRAW_FILL_EMPTY);
     Paint_DrawRectangle(225, 10, 105*(percentage/100.0)+225, 34, BLACK, DOT_PIXEL_1X1, DRAW_FILL_FULL);
 
     char batterpercent[8] = "";
@@ -432,7 +445,7 @@ void loop(){
   }
 
   //Paint_DrawNum(0, 0, (int32_t)refreshes, &Font20, BLACK, WHITE);
-#ifdef EINK_2IN54V2
+#ifdef EINK_1IN54V2
   if (refreshes == 1) {
     EPD_1IN54_V2_Init();
     EPD_1IN54_V2_DisplayPartBaseImage(BlackImage);
@@ -453,12 +466,12 @@ void loop(){
   EPD_4IN2_Sleep();
 #endif
   if (refreshes == 720) { // every hour or every six hours on battery
-    refreshes = 0; // force full update
+    refreshes = 0;        // force full update
   }
   refreshes++;
 
   if (BatteryMode) {
-    if (!commingFromDeepSleep){
+    if (!comingFromDeepSleep) {
       scd4x.stopPeriodicMeasurement();
       scd4x.setTemperatureOffset(0.8);
       scd4x.startLowPowerPeriodicMeasurement();
