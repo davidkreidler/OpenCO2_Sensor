@@ -335,18 +335,29 @@ void loop() {
     Paint_DrawString_EN(142, 150, "ppmn", &bahn_sml, WHITE, BLACK);
 
     /* temperature */
+//#define useFahrenheit
+#ifdef useFahrenheit
+    temperature = (temperature*1.8f)+32.0f; // convert to °F
+    char unit[3] = "*F";
+#else
+    char unit[3] = "*C";
+#endif
     if (temperature < 10.0f) Paint_DrawNum(30, 5, temperature, &bahn_mid, BLACK, WHITE);
     else                     Paint_DrawNum( 1, 5, temperature, &bahn_mid, BLACK, WHITE);
-    Paint_DrawString_EN(60, 4, "*C", &bahn_sml, WHITE, BLACK);
-    Paint_DrawString_EN(60, 32, ",", &bahn_sml, WHITE, BLACK);
+    int offset = 0;
+#ifdef useFahrenheit
+    if (temperature >= 100) offset = 29;
+#endif
+    Paint_DrawString_EN(60+offset, 4, unit, &bahn_sml, WHITE, BLACK);
+    Paint_DrawString_EN(60+offset, 32, ",", &bahn_sml, WHITE, BLACK);
     char decimal[2];
     sprintf(decimal, "%d", ((int)(temperature * 10)) % 10);
-    Paint_DrawString_EN(71, 27, decimal, &bahn_sml, WHITE, BLACK);
+    Paint_DrawString_EN(71+offset, 27, decimal, &bahn_sml, WHITE, BLACK);
 
     /* humidity */
     Paint_DrawNum(124, 5, humidity, &bahn_mid, BLACK, WHITE);
     Paint_DrawString_EN(184, 5, "%", &bahn_sml, WHITE, BLACK);
-#endif
+#endif /* EINK_1IN54V2 */
 #ifdef EINK_4IN2
     /* co2 */
                                  // Xstart,Ystart
