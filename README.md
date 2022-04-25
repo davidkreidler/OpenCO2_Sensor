@@ -5,13 +5,13 @@ Arduino Repository for an e-paper CO2 Sensor with the ESP32-S2
 
 # Flash the binary to the CO2-Sensor
 
-1. Download [esptool.py](https://raw.githubusercontent.com/espressif/esptool/master/esptool.py)
-2. Download the `.bin` files from the latest [release](https://github.com/davidkreidler/SCD4x_CO2_Sensor_ESP32/releases)
+1. Download and unzip [esptool](https://github.com/espressif/esptool)
+2. Download the CO2-Sensor `.bin` files from the latest [release](https://github.com/davidkreidler/SCD4x_CO2_Sensor_ESP32/releases)
 3. Make sure, that the power switch is in the `ON` position (down)
 4. Plug a data USB cable into your PC and the Sensor
 5. Hold the Button on the backside of the CO2 Sensor near the USB-C port and push simultaneously the reset ↪️ Button
 6. Release the reset ↪️ Button first and then the other one
-7. Run the following commands in the folder containing the `.bin` and `esptool.py`
+7. Run the following commands in the folder containing the `.bin` and `esptool`
    port for Windows: `COM7` or Linux: `/dev/ttyUSB0`|`/dev/ttyACM0`
 ```
 $ cd ~/Downloads
