@@ -14,8 +14,11 @@
 #include "GUI_Paint.h"
 #include <stdlib.h>
 #include "init.h"
+#define DISPLAY_POWER 45
+#define LED_POWER 9
 #define EINK_1IN54V2
 //#define EINK_4IN2
+//#define TEST_MODE
 
 /* welcome */
 #include <EEPROM.h>
@@ -52,6 +55,10 @@ RTC_DATA_ATTR bool comingFromDeepSleep = false;
 RTC_DATA_ATTR int ledbrightness = 5;
 RTC_DATA_ATTR uint16_t co2 = 400;
 RTC_DATA_ATTR bool LEDalwaysOn = false;
+RTC_DATA_ATTR int HWSubRev = 1; //default only
+#ifdef TEST_MODE
+RTC_DATA_ATTR uint16_t sensorStatus;
+#endif
 
 #ifdef WIFI
 #define tempOffset 13.0
@@ -96,9 +103,33 @@ void initOnce() {
 #endif
   Paint_Clear(WHITE);
 
-  EEPROM.begin(1); // EEPROM_SIZE
+  EEPROM.begin(2); // EEPROM_SIZE
+#ifdef TEST_MODE
+  EEPROM.write(0, 0); //reset welcome
+  //EEPROM.write(1, 2); //write HWSubRev 2
+  EEPROM.commit();
+  
+  digitalWrite(LED_POWER, LOW); //LED on
+  strip.begin();
+  strip.setPixelColor(0, 5, 5, 5); //index, green, red, blue
+  strip.show();
+
+#ifdef EINK_1IN54V2
+  Paint_DrawBitMap(gImage_init);
+  Paint_DrawNum(125, 25, 1, &bahn_mid, BLACK, WHITE);
+  EPD_1IN54_V2_Display(BlackImage);
+#endif
+#ifdef EINK_4IN2
+  EPD_4IN2_Display(BlackImage);
+#endif
+
+  scd4x.stopPeriodicMeasurement();
+  scd4x.performSelfTest(sensorStatus);
+#else
   int welcomeDone = EEPROM.read(0);
   if (welcomeDone != 1) displayWelcome();
+#endif /* TEST_MODE */
+  HWSubRev = EEPROM.read(1);
 
   scd4x.stopPeriodicMeasurement(); // stop potentially previously started measurement
   scd4x.setSensorAltitude(50);     // Berlin: 50m über NN
@@ -122,10 +153,13 @@ void initOnce() {
 
 void setLED(uint16_t co2_value) {
   if (BatteryMode && !LEDalwaysOn) {
+    digitalWrite(LED_POWER, HIGH); // LED OFF
     strip.clear();
     strip.show();
     return;
   }
+  digitalWrite(LED_POWER, LOW); //LED ON
+  delay(1);
 
   int red = 0, green = 0, blue = 0;
 
@@ -173,6 +207,7 @@ void lowBatteryMode() {
   EPD_4IN2_Display(BlackImage);
   EPD_4IN2_Sleep();
 #endif
+  gpio_hold_dis((gpio_num_t)LED_POWER); //led off
 
   esp_sleep_enable_ext0_wakeup((gpio_num_t)4, 1);
   esp_sleep_pd_config(ESP_PD_DOMAIN_RTC_PERIPH, ESP_PD_OPTION_AUTO);   // RTC IO, sensors and ULP co-processor
@@ -204,6 +239,9 @@ void goto_deep_sleep(int ms) {
   rtc_gpio_pulldown_dis((gpio_num_t)0);
   esp_sleep_enable_ext1_wakeup((uint64_t)0x1, ESP_EXT1_WAKEUP_ALL_LOW);
 
+  if (LEDalwaysOn) gpio_hold_en((gpio_num_t)LED_POWER);
+  else gpio_hold_dis((gpio_num_t)LED_POWER);
+  
   comingFromDeepSleep = true;
   esp_deep_sleep_start();
 }
@@ -231,7 +269,8 @@ void updateBatteryMode() {
 }
 
 double readBatteryVoltage() {
-  // IO5 measurement was 5210 with 0.0 offset
+  // IO5 for voltage divider measurement
+  if (HWSubRev == 2) return ((analogRead(5) * 3.33) / 5358.0);
   return ((analogRead(5) * 3.33) / 5084.0) + 0.02;
 }
 
@@ -249,6 +288,9 @@ uint8_t calcBatteryPercentage(double voltage) {
 }
 
 void setup() {
+  pinMode(DISPLAY_POWER, OUTPUT);
+  pinMode(LED_POWER, OUTPUT);
+  digitalWrite(DISPLAY_POWER, HIGH);
   DEV_Module_Init();
 
   /* scd4x */
@@ -281,15 +323,12 @@ void setup() {
   }
 
   if (!BatteryMode && comingFromDeepSleep) {
-    delay(10);
+    delay(1);
     setLED(co2);
 
     scd4x.stopPeriodicMeasurement();   // stop low power measurement
     scd4x.setTemperatureOffset(tempOffset);
     scd4x.startPeriodicMeasurement();
-
-    /* Wait for co2 measurement */
-    goto_light_sleep(4000);
   }
 }
 
@@ -424,17 +463,38 @@ void loop() {
   }
 #endif
 
+#ifdef TEST_MODE
+  double voltage = readBatteryVoltage();
+  char batteryvolt[8] = "";
+  dtostrf(voltage, 1, 3, batteryvolt);
+  char volt[10] = "V";
+  strcat(batteryvolt, volt);
+  Paint_DrawString_EN(0, 140, batteryvolt, &Font20, WHITE, BLACK);
+
+  char BatteryMode_s[9] = "";
+  strcat(BatteryMode_s, "USB-C:");
+  strcat(BatteryMode_s, BatteryMode ? "no" : "yes");
+  Paint_DrawString_EN(0, 160, BatteryMode_s, &Font20, WHITE, BLACK);
+
+  char sensorStatus_s[20] = "";
+  strcat(sensorStatus_s, "SCD4x:");
+  if (sensorStatus == 0) {
+    strcat(sensorStatus_s, "good");
+  } else {
+    char snum[5];
+    itoa(sensorStatus, snum, 10);
+    strcat(sensorStatus_s, snum);
+  }
+  Paint_DrawString_EN(0, 180, sensorStatus_s, &Font20, WHITE, BLACK);
+  Paint_DrawNum(158, 180, (int32_t)refreshes, &Font20, BLACK, WHITE);
+#else
+
   /* Print Battery % */
   if (BatteryMode) {
     double voltage = readBatteryVoltage();
     if (voltage < 3.1) lowBatteryMode();
     uint8_t percentage = calcBatteryPercentage(voltage);
 
-    /*char batteryvolt[8] = "";
-    dtostrf(voltage, 1, 3, batteryvolt);
-    char volt[10] = "V";
-    strcat(batteryvolt, volt);
-    Paint_DrawString_EN(100, 180, batteryvolt, &Font20, WHITE, BLACK);*/
 
 #ifdef EINK_1IN54V2
                   // Xstart,Ystart,Xend,Yend
@@ -454,8 +514,8 @@ void loop() {
     Paint_DrawString_EN(342, 10, batterpercent, &bahn_sml, WHITE, BLACK);
 #endif
   }
+#endif /* TEST_MODE */
 
-  //Paint_DrawNum(0, 0, (int32_t)refreshes, &Font20, BLACK, WHITE);
 #ifdef EINK_1IN54V2
   if (refreshes == 1) {
     EPD_1IN54_V2_Init();
@@ -481,6 +541,7 @@ void loop() {
   }
   refreshes++;
 
+#ifndef TEST_MODE
   if (BatteryMode) {
     if (!comingFromDeepSleep) {
       scd4x.stopPeriodicMeasurement();
@@ -489,6 +550,7 @@ void loop() {
     }
     goto_deep_sleep(29000);
   }
+#endif
 
   goto_light_sleep(4000);
 }

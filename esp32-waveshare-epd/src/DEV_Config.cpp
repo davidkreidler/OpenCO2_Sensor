@@ -47,7 +47,7 @@ UBYTE DEV_Module_Init(void)
 	//gpio
 	GPIO_Config();
 
-    SPI.begin(41,37,21,34); //sck,miso,mosi,ss
+    SPI.begin(EPD_SCK_PIN, -1, EPD_MOSI_PIN, -1);  //sck,miso,mosi,ss
     SPI.beginTransaction(SPISettings(2000000, MSBFIRST, SPI_MODE0));
 
 	return 0;
