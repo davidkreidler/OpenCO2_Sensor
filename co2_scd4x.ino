@@ -56,6 +56,7 @@ RTC_DATA_ATTR int ledbrightness = 5;
 RTC_DATA_ATTR uint16_t co2 = 400;
 RTC_DATA_ATTR bool LEDalwaysOn = false;
 RTC_DATA_ATTR int HWSubRev = 1; //default only
+RTC_DATA_ATTR float maxBatteryVoltage;
 #ifdef TEST_MODE
 RTC_DATA_ATTR uint16_t sensorStatus;
 #endif
@@ -103,10 +104,11 @@ void initOnce() {
 #endif
   Paint_Clear(WHITE);
 
-  EEPROM.begin(2); // EEPROM_SIZE
+  EEPROM.begin(3); // EEPROM_SIZE
 #ifdef TEST_MODE
   EEPROM.write(0, 0); //reset welcome
   //EEPROM.write(1, 2); //write HWSubRev 2
+  EEPROM.write(2,0.0); //write maxBatteryVoltage 
   EEPROM.commit();
   
   digitalWrite(LED_POWER, LOW); //LED on
@@ -124,12 +126,14 @@ void initOnce() {
 #endif
 
   scd4x.stopPeriodicMeasurement();
+  //scd4x.performFactoryReset();
   scd4x.performSelfTest(sensorStatus);
 #else
   int welcomeDone = EEPROM.read(0);
   if (welcomeDone != 1) displayWelcome();
 #endif /* TEST_MODE */
   HWSubRev = EEPROM.read(1);
+  maxBatteryVoltage = EEPROM.read(2);
 
   scd4x.stopPeriodicMeasurement(); // stop potentially previously started measurement
   scd4x.setSensorAltitude(50);     // Berlin: 50m über NN
@@ -159,7 +163,7 @@ void setLED(uint16_t co2_value) {
     return;
   }
   digitalWrite(LED_POWER, LOW); //LED ON
-  delay(1);
+  delay(10);
 
   int red = 0, green = 0, blue = 0;
 
@@ -270,14 +274,26 @@ void updateBatteryMode() {
 
 double readBatteryVoltage() {
   // IO5 for voltage divider measurement
-  if (HWSubRev == 2) return ((analogRead(5) * 3.33) / 5358.0);
+  if (HWSubRev == 2) {
+    double voltage = (analogRead(5) * 3.33) / 5358.0;
+    if ((voltage > maxBatteryVoltage) && (voltage < 4.2) && (digitalRead(4) == LOW)) {
+       maxBatteryVoltage = voltage;
+       EEPROM.write(2, maxBatteryVoltage);
+       EEPROM.commit();
+    }
+    return voltage;
+  }
   return ((analogRead(5) * 3.33) / 5084.0) + 0.02;
 }
 
 uint8_t calcBatteryPercentage(double voltage) {
+  if (HWSubRev == 2) {
+    voltage += (4.2 - maxBatteryVoltage); // in field calibration 
+  } else { 
 #ifdef EINK_1IN54V2
   voltage += 0.11; // offset for type of Battery used
 #endif
+  }
 
   if (voltage <= 3.62)
     return 75 * pow((voltage - 3.2), 2.);
@@ -329,6 +345,8 @@ void setup() {
     scd4x.stopPeriodicMeasurement();   // stop low power measurement
     scd4x.setTemperatureOffset(tempOffset);
     scd4x.startPeriodicMeasurement();
+    /* Wait for co2 measurement */
+    delay(5000);
   }
 }
 
@@ -371,7 +389,9 @@ void loop() {
     if      (co2 > 9999) Paint_DrawNum(27, 78, co2, &bahn_mid, BLACK, WHITE);
     else if (co2 < 1000) Paint_DrawNum(30, 65, co2, &bahn_big, BLACK, WHITE);
     else                 Paint_DrawNum( 6, 65, co2, &bahn_big, BLACK, WHITE);
-    Paint_DrawString_EN(142, 150, "ppmn", &bahn_sml, WHITE, BLACK);
+    Paint_DrawString_EN(100, 150, "CO", &Font24, WHITE, BLACK);
+    Paint_DrawNum(131, 160, 2, &Font20, BLACK, WHITE);
+    Paint_DrawString_EN(144, 150, "ppm", &Font24, WHITE, BLACK);
 
     /* temperature */
 //#define useFahrenheit
@@ -498,9 +518,22 @@ void loop() {
 
 #ifdef EINK_1IN54V2
                   // Xstart,Ystart,Xend,Yend
-    Paint_DrawRectangle( 15, 145, 120, 169, BLACK, DOT_PIXEL_2X2, DRAW_FILL_EMPTY);
-    Paint_DrawRectangle(120, 149, 125, 165, BLACK, DOT_PIXEL_2X2, DRAW_FILL_EMPTY);
-    Paint_DrawRectangle( 15, 145, 105*(percentage/100.0)+15, 169, BLACK, DOT_PIXEL_1X1, DRAW_FILL_FULL);
+    Paint_DrawRectangle( 1, 143, 92, 178, BLACK, DOT_PIXEL_2X2, DRAW_FILL_EMPTY); //case
+    Paint_DrawRectangle(92, 151, 97, 170, BLACK, DOT_PIXEL_2X2, DRAW_FILL_EMPTY); //nippel
+    //Paint_DrawRectangle( 1, 143, 91*(percentage/100.0)+1, 178, BLACK, DOT_PIXEL_1X1, DRAW_FILL_FULL);
+
+    char batterpercent[8] = "";
+    dtostrf(percentage, 3, 0, batterpercent);
+    char percent[10] = "%";
+    strcat(batterpercent, percent);
+    Paint_DrawString_EN(20,149, batterpercent, &bahn_sml, WHITE, BLACK);
+
+    /* invert the filled part of the Battery */
+    for (int x = (200-(90*(percentage/100.0))); x < (200-2); x++) {
+      for (int y = 145/8; y < 179/8; y++) {
+        BlackImage[y+x*25] = ~BlackImage[y+x*25];
+      }
+    }
 #endif
 #ifdef EINK_4IN2
     Paint_DrawRectangle(225, 10, 330, 34, BLACK, DOT_PIXEL_2X2, DRAW_FILL_EMPTY);
@@ -517,11 +550,20 @@ void loop() {
 #endif /* TEST_MODE */
 
 #ifdef EINK_1IN54V2
+//#define invertDisplay
+#ifdef invertDisplay
+  for (int x = 0; x < 200; x++) {
+    for (int y = 0; y < 200/8; y++) {
+      BlackImage[y+x*25] = ~BlackImage[y+x*25];
+    }
+  }
+#endif
   if (refreshes == 1) {
     EPD_1IN54_V2_Init();
     EPD_1IN54_V2_DisplayPartBaseImage(BlackImage);
   } else {
     EPD_1IN54_V2_Init_Partial();
+    if(comingFromDeepSleep) EPD_1IN54_V2_writePrevImage(BlackImage);
     EPD_1IN54_V2_DisplayPart(BlackImage); // partial update
   }
   EPD_1IN54_V2_Sleep();

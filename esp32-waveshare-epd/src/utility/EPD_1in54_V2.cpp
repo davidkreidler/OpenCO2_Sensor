@@ -347,6 +347,22 @@ void EPD_1IN54_V2_DisplayPartBaseImage(UBYTE *Image)
     EPD_1IN54_V2_TurnOnDisplay();
 }
 
+void EPD_1IN54_V2_writePrevImage(UBYTE *Image) /* by DJK */
+{
+    UWORD Width, Height;
+    Width = (EPD_1IN54_V2_WIDTH % 8 == 0)? (EPD_1IN54_V2_WIDTH / 8 ): (EPD_1IN54_V2_WIDTH / 8 + 1);
+    Height = EPD_1IN54_V2_HEIGHT;
+
+    UDOUBLE Addr = 0;
+    EPD_1IN54_V2_SendCommand(0x26);
+    for (UWORD j = 0; j < Height; j++) {
+        for (UWORD i = 0; i < Width; i++) {
+            Addr = i + j * Width;
+            EPD_1IN54_V2_SendData(~Image[Addr]);
+        }
+    }
+}
+
 /******************************************************************************
 function :	Sends the image buffer in RAM to e-Paper and displays
 parameter:

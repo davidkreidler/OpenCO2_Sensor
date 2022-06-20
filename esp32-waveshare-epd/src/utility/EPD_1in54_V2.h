@@ -41,6 +41,7 @@ void EPD_1IN54_V2_Init_Partial(void);
 void EPD_1IN54_V2_Clear(void);
 void EPD_1IN54_V2_Display(UBYTE *Image);
 void EPD_1IN54_V2_DisplayPartBaseImage(UBYTE *Image);
+void EPD_1IN54_V2_writePrevImage(UBYTE *Image);
 void EPD_1IN54_V2_DisplayPart(UBYTE *Image);
 void EPD_1IN54_V2_Sleep(void);
 
