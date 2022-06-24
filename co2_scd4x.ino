@@ -22,6 +22,8 @@
 
 /* welcome */
 #include <EEPROM.h>
+#include <Preferences.h>
+Preferences preferences;
 
 /* WIFI */
 //#define WIFI
@@ -104,12 +106,14 @@ void initOnce() {
 #endif
   Paint_Clear(WHITE);
 
-  EEPROM.begin(3); // EEPROM_SIZE
+  EEPROM.begin(2); // EEPROM_SIZE
 #ifdef TEST_MODE
   EEPROM.write(0, 0); //reset welcome
   //EEPROM.write(1, 2); //write HWSubRev 2
-  EEPROM.write(2,0.0); //write maxBatteryVoltage 
   EEPROM.commit();
+  preferences.begin("co2-sensor", true); 
+  preferences.putFloat("MBV", 3.95); //default maxBatteryVoltage
+  preferences.end();
   
   digitalWrite(LED_POWER, LOW); //LED on
   strip.begin();
@@ -133,7 +137,9 @@ void initOnce() {
   if (welcomeDone != 1) displayWelcome();
 #endif /* TEST_MODE */
   HWSubRev = EEPROM.read(1);
-  maxBatteryVoltage = EEPROM.read(2);
+  preferences.begin("co2-sensor", true); 
+  maxBatteryVoltage = preferences.getFloat("MBV", 3.95);
+  preferences.end();
 
   scd4x.stopPeriodicMeasurement(); // stop potentially previously started measurement
   scd4x.setSensorAltitude(50);     // Berlin: 50m über NN
@@ -272,28 +278,23 @@ void updateBatteryMode() {
   BatteryMode = (digitalRead(4) == LOW);
 }
 
-double readBatteryVoltage() {
+float readBatteryVoltage() {
   // IO5 for voltage divider measurement
-  if (HWSubRev == 2) {
-    double voltage = (analogRead(5) * 3.33) / 5358.0;
-    if ((voltage > maxBatteryVoltage) && (voltage < 4.2) && (digitalRead(4) == LOW)) {
-       maxBatteryVoltage = voltage;
-       EEPROM.write(2, maxBatteryVoltage);
-       EEPROM.commit();
-    }
-    return voltage;
+  float voltage;
+  if (HWSubRev == 2) voltage = (analogRead(5) * 3.33) / 5358.0;
+  else               voltage = (analogRead(5) * 3.33) / 5084.0 + 0.02;
+
+  if ((voltage > maxBatteryVoltage) && (voltage < 4.2) && (digitalRead(4) == LOW)) {
+     maxBatteryVoltage = voltage;
+     preferences.begin("co2-sensor", false); 
+     preferences.putFloat("MBV", voltage); //save maxBatteryVoltage
+     preferences.end();
   }
-  return ((analogRead(5) * 3.33) / 5084.0) + 0.02;
+  return voltage;
 }
 
-uint8_t calcBatteryPercentage(double voltage) {
-  if (HWSubRev == 2) {
-    voltage += (4.2 - maxBatteryVoltage); // in field calibration 
-  } else { 
-#ifdef EINK_1IN54V2
-  voltage += 0.11; // offset for type of Battery used
-#endif
-  }
+uint8_t calcBatteryPercentage(float voltage) {
+  voltage += (4.2 - maxBatteryVoltage); // in field calibration 
 
   if (voltage <= 3.62)
     return 75 * pow((voltage - 3.2), 2.);
@@ -484,7 +485,7 @@ void loop() {
 #endif
 
 #ifdef TEST_MODE
-  double voltage = readBatteryVoltage();
+  float voltage = readBatteryVoltage();
   char batteryvolt[8] = "";
   dtostrf(voltage, 1, 3, batteryvolt);
   char volt[10] = "V";
@@ -508,10 +509,15 @@ void loop() {
   Paint_DrawString_EN(0, 180, sensorStatus_s, &Font20, WHITE, BLACK);
   Paint_DrawNum(158, 180, (int32_t)refreshes, &Font20, BLACK, WHITE);
 #else
+  /*char batteryvolt[8] = "";
+  dtostrf(maxBatteryVoltage, 1, 3, batteryvolt);
+  char volt[10] = "V";
+  strcat(batteryvolt, volt);
+  Paint_DrawString_EN(80, 180, batteryvolt, &Font20, WHITE, BLACK);*/
 
   /* Print Battery % */
   if (BatteryMode) {
-    double voltage = readBatteryVoltage();
+    float voltage = readBatteryVoltage();
     if (voltage < 3.1) lowBatteryMode();
     uint8_t percentage = calcBatteryPercentage(voltage);
 
