@@ -172,7 +172,7 @@ void displayWriteMeasuerments(uint16_t co2,uint16_t temperature, uint16_t humidi
     Paint_DrawString_EN(140, 220, "*C", &bahn_sml, WHITE, BLACK);
     Paint_DrawLine(137, 287, 137, 287, BLACK, DOT_PIXEL_4X4, LINE_STYLE_SOLID);
 
-    char decimal[1];
+    char decimal[2];
     sprintf(decimal, "%d", ((int)(temperature * 10)) % 10);
     Paint_DrawString_EN(145, 247, decimal, &bahn_mid, WHITE, BLACK);
 

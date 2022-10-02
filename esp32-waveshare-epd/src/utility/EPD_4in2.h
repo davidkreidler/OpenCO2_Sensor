@@ -127,4 +127,6 @@ void EPD_4IN2_PartialDisplay(UWORD X_start,UWORD Y_start,UWORD X_end,UWORD Y_end
 
 void EPD_4IN2_Init_4Gray(void);
 void EPD_4IN2_4GrayDisplay(const UBYTE *Image);
+
+
 #endif
