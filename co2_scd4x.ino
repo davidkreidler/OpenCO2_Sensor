@@ -12,7 +12,9 @@
 #include "DEV_Config.h"
 #include "epd_abstraction.h"
 #define DISPLAY_POWER 45
-#define LED_POWER 9
+#define LED_POWER GPIO_NUM_9
+#define USB_PRESENT GPIO_NUM_4
+#define BATTERY_VOLTAGE GPIO_NUM_5
 //#define TEST_MODE
 
 /* welcome */
@@ -141,9 +143,13 @@ void lowBatteryMode() {
   scd4x.stopPeriodicMeasurement();
   scd4x.powerDown();
   displayLowBattery();
-  gpio_hold_dis((gpio_num_t)LED_POWER); //led off
+  gpio_hold_dis(LED_POWER);
 
-  esp_sleep_enable_ext0_wakeup((gpio_num_t)4, 1);
+  /* Wakeup by usb power */
+  rtc_gpio_pullup_dis(USB_PRESENT);
+  rtc_gpio_pulldown_dis(USB_PRESENT);
+  esp_sleep_enable_ext0_wakeup(USB_PRESENT, 1);
+
   esp_sleep_pd_config(ESP_PD_DOMAIN_RTC_PERIPH, ESP_PD_OPTION_AUTO);   // RTC IO, sensors and ULP co-processor
   esp_sleep_pd_config(ESP_PD_DOMAIN_RTC_SLOW_MEM, ESP_PD_OPTION_AUTO); // RTC slow memory: auto
   esp_sleep_pd_config(ESP_PD_DOMAIN_RTC_FAST_MEM, ESP_PD_OPTION_OFF);  // RTC fast memory
@@ -159,7 +165,7 @@ void goto_deep_sleep(int ms) {
   WiFi.disconnect(true);  // Disconnect from the network
   WiFi.mode(WIFI_OFF);    // Switch WiFi off
 #endif
-  esp_sleep_enable_ext0_wakeup((gpio_num_t)4, 1);
+
   esp_sleep_enable_timer_wakeup(ms * 1000);                             // periodic measurement every 30 sec - 0.83 sec awake
   esp_sleep_pd_config(ESP_PD_DOMAIN_RTC_PERIPH, ESP_PD_OPTION_AUTO);    // RTC IO, sensors and ULP co-processor
   esp_sleep_pd_config(ESP_PD_DOMAIN_RTC_SLOW_MEM, ESP_PD_OPTION_AUTO);  // RTC slow memory: auto
@@ -168,13 +174,19 @@ void goto_deep_sleep(int ms) {
   esp_sleep_pd_config(ESP_PD_DOMAIN_RTC8M, ESP_PD_OPTION_OFF);          // CPU core
   esp_sleep_pd_config(ESP_PD_DOMAIN_VDDSDIO, ESP_PD_OPTION_OFF);
 
-  /* Wakeup by IO0 button */
-  rtc_gpio_pullup_en((gpio_num_t)0);
-  rtc_gpio_pulldown_dis((gpio_num_t)0);
-  esp_sleep_enable_ext1_wakeup((uint64_t)0x1, ESP_EXT1_WAKEUP_ALL_LOW);
+  /* Wakeup by usb power */
+  rtc_gpio_pullup_dis(USB_PRESENT);
+  rtc_gpio_pulldown_dis(USB_PRESENT);
+  esp_sleep_enable_ext0_wakeup(USB_PRESENT, 1);
 
-  if (LEDalwaysOn) gpio_hold_en((gpio_num_t)LED_POWER);
-  else gpio_hold_dis((gpio_num_t)LED_POWER);
+  /* Wakeup by IO0 button */
+  rtc_gpio_pullup_en(GPIO_NUM_0);
+  rtc_gpio_pulldown_dis(GPIO_NUM_0);
+  esp_sleep_enable_ext1_wakeup(0x1,ESP_EXT1_WAKEUP_ALL_LOW); // 2^0 = GPIO_NUM_0 
+
+  /* Keep LED enabled */
+  if (LEDalwaysOn) gpio_hold_en(LED_POWER);
+  else gpio_hold_dis(LED_POWER);
   
   comingFromDeepSleep = true;
   esp_deep_sleep_start();
@@ -199,16 +211,16 @@ void goto_light_sleep(int ms) {
 }
 
 void updateBatteryMode() {
-  BatteryMode = (digitalRead(4) == LOW);
+  BatteryMode = (digitalRead(USB_PRESENT) == LOW);
 }
 
 float readBatteryVoltage() {
   // IO5 for voltage divider measurement
   float voltage;
-  if (HWSubRev == 2) voltage = (analogRead(5) * 3.33) / 5358.0;
-  else               voltage = (analogRead(5) * 3.33) / 5084.0 + 0.02;
+  if (HWSubRev == 2) voltage = (analogRead(BATTERY_VOLTAGE) * 3.33) / 5358.0;
+  else               voltage = (analogRead(BATTERY_VOLTAGE) * 3.33) / 5084.0 + 0.02;
 
-  if ((voltage > maxBatteryVoltage) && (voltage < 4.2) && (digitalRead(4) == LOW)) {
+  if ((voltage > maxBatteryVoltage) && (voltage < 4.2) && (digitalRead(USB_PRESENT) == LOW)) {
      maxBatteryVoltage = voltage;
      preferences.begin("co2-sensor", false); 
      preferences.putFloat("MBV", voltage); //save maxBatteryVoltage
@@ -241,8 +253,8 @@ void setup() {
   if (!initDone) initOnce();
 
   /* power */
-  pinMode(4, INPUT);  // usb Power
-  pinMode(5, INPUT);  // Battery Voltage
+  pinMode(USB_PRESENT, INPUT);
+  pinMode(BATTERY_VOLTAGE, INPUT);
   updateBatteryMode();
 
 #ifdef WIFI

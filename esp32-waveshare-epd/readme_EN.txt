@@ -8,6 +8,8 @@
 * | Date        :   2020-02-19
 * | Info        :   Provide a Chinese version of the documentation here for your quick use
 ******************************************************************************/
+Source: https://www.waveshare.com/wiki/File:E-Paper_ESP32_Driver_Board_Code.7z
+
 This file is to help you use this routine.
 
 1. Basic information:
