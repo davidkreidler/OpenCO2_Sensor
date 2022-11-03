@@ -20,6 +20,10 @@
 RTC_DATA_ATTR int refreshes = 1;
 RTC_DATA_ATTR UBYTE *BlackImage;
 
+sFONT big=bahn_big; //gotham_big nothing_big bahn_big
+sFONT mid=bahn_mid; //gotham_mid nothing_mid bahn_mid
+sFONT sml=bahn_sml; //gotham_sml nothing_sml bahn_sml
+
 void displayWelcome() {
 #ifdef EINK_1IN54V2
   Paint_DrawBitMap(gImage_welcome);
@@ -51,7 +55,7 @@ void initEpdOnce() {
   EPD_1IN54_V2_Init();
 #endif
 #ifdef EINK_4IN2
-  BlackImage = (UBYTE *)malloc(EPD_4IN2_WIDTH / 4 );
+  BlackImage = (UBYTE *)malloc(15000);
   Paint_NewImage(BlackImage, EPD_4IN2_WIDTH, EPD_4IN2_HEIGHT, 0, WHITE);
   EPD_4IN2_Init_Fast();
 #endif
@@ -61,7 +65,7 @@ void initEpdOnce() {
 void displayInitTestMode() {
 #ifdef EINK_1IN54V2
   Paint_DrawBitMap(gImage_init);
-  Paint_DrawNum(125, 25, 1, &bahn_mid, BLACK, WHITE);
+  Paint_DrawNum(125, 25, 1, &mid, BLACK, WHITE);
   EPD_1IN54_V2_Display(BlackImage);
 #endif
 #ifdef EINK_4IN2
@@ -105,13 +109,13 @@ void displayLowBattery() {
 #endif
 }
 
-void displayWriteMeasuerments(uint16_t co2,uint16_t temperature, uint16_t humidity) {
+void displayWriteMeasuerments(uint16_t co2, float temperature, float humidity) {
   Paint_Clear(WHITE);
 #ifdef EINK_1IN54V2
     /* co2 */
-    if      (co2 > 9999) Paint_DrawNum(27, 78, co2, &bahn_mid, BLACK, WHITE);
-    else if (co2 < 1000) Paint_DrawNum(30, 65, co2, &bahn_big, BLACK, WHITE);
-    else                 Paint_DrawNum( 6, 65, co2, &bahn_big, BLACK, WHITE);
+    if      (co2 > 9999) Paint_DrawNum(27, 78, co2, &mid, BLACK, WHITE);
+    else if (co2 < 1000) Paint_DrawNum(30, 65, co2, &big, BLACK, WHITE);
+    else                 Paint_DrawNum( 6, 65, co2, &big, BLACK, WHITE);
     Paint_DrawString_EN(100, 150, "CO", &Font24, WHITE, BLACK);
     Paint_DrawNum(131, 160, 2, &Font20, BLACK, WHITE);
     Paint_DrawString_EN(144, 150, "ppm", &Font24, WHITE, BLACK);
@@ -124,29 +128,29 @@ void displayWriteMeasuerments(uint16_t co2,uint16_t temperature, uint16_t humidi
 #else
     char unit[3] = "*C";
 #endif
-    if (temperature < 10.0f) Paint_DrawNum(30, 5, temperature, &bahn_mid, BLACK, WHITE);
-    else                     Paint_DrawNum( 1, 5, temperature, &bahn_mid, BLACK, WHITE);
+    if (temperature < 10.0f) Paint_DrawNum(30, 5, temperature, &mid, BLACK, WHITE);
+    else                     Paint_DrawNum( 1, 5, temperature, &mid, BLACK, WHITE);
     int offset = 0;
 #ifdef useFahrenheit
     if (temperature >= 100) offset = 29;
 #endif
-    Paint_DrawString_EN(60+offset, 4, unit, &bahn_sml, WHITE, BLACK);
-    Paint_DrawString_EN(60+offset, 32, ",", &bahn_sml, WHITE, BLACK);
+    Paint_DrawString_EN(60+offset, 4, unit, &sml, WHITE, BLACK);
+    Paint_DrawString_EN(60+offset, 32, ",", &sml, WHITE, BLACK);
     char decimal[2];
     sprintf(decimal, "%d", ((int)(temperature * 10)) % 10);
-    Paint_DrawString_EN(71+offset, 27, decimal, &bahn_sml, WHITE, BLACK);
+    Paint_DrawString_EN(71+offset, 27, decimal, &sml, WHITE, BLACK);
 
     /* humidity */
-    Paint_DrawNum(124, 5, humidity, &bahn_mid, BLACK, WHITE);
-    Paint_DrawString_EN(184, 5, "%", &bahn_sml, WHITE, BLACK);
+    Paint_DrawNum(124, 5, humidity, &mid, BLACK, WHITE);
+    Paint_DrawString_EN(184, 5, "%", &sml, WHITE, BLACK);
 #endif /* EINK_1IN54V2 */
 #ifdef EINK_4IN2
     /* co2 */
                                  // Xstart,Ystart
-    if      (co2 > 9999) Paint_DrawNum(102, 88, co2, &bahn_big, BLACK, WHITE);
-    else if (co2 < 1000) Paint_DrawNum(196, 88, co2, &bahn_big, BLACK, WHITE);
-    else                 Paint_DrawNum(149, 88, co2, &bahn_big, BLACK, WHITE);
-    Paint_DrawString_EN(337, 143, "ppmn", &bahn_sml, WHITE, BLACK);
+    if      (co2 > 9999) Paint_DrawNum(102, 88, co2, &big, BLACK, WHITE);
+    else if (co2 < 1000) Paint_DrawNum(196, 88, co2, &big, BLACK, WHITE);
+    else                 Paint_DrawNum(149, 88, co2, &big, BLACK, WHITE);
+    Paint_DrawString_EN(337, 143, "ppmn", &sml, WHITE, BLACK);
 
     /* devider lines */
              // Xstart,Ystart,Xend,Yend
@@ -164,21 +168,21 @@ void displayWriteMeasuerments(uint16_t co2,uint16_t temperature, uint16_t humidi
     Paint_DrawCircle(    54, 132,  16, BLACK, DOT_PIXEL_3X3, DRAW_FILL_EMPTY);      //C
     Paint_DrawRectangle( 58, 112,  72, 152, WHITE, DOT_PIXEL_1X1, DRAW_FILL_FULL);  //C
     Paint_DrawCircle(    80, 132,  16, BLACK, DOT_PIXEL_3X3, DRAW_FILL_EMPTY);      //O
-    Paint_DrawNum(       94, 145,   2, &bahn_sml, BLACK, WHITE);                    //2
+    Paint_DrawNum(       94, 145,   2, &sml, BLACK, WHITE);                    //2
 
     /* temperature */
-    if (temperature < 10.0f) Paint_DrawNum(69, 220, temperature, &bahn_big, BLACK, WHITE);
-    else                     Paint_DrawNum(32, 220, temperature, &bahn_big, BLACK, WHITE);
-    Paint_DrawString_EN(140, 220, "*C", &bahn_sml, WHITE, BLACK);
+    if (temperature < 10.0f) Paint_DrawNum(69, 220, temperature, &big, BLACK, WHITE);
+    else                     Paint_DrawNum(32, 220, temperature, &big, BLACK, WHITE);
+    Paint_DrawString_EN(140, 220, "*C", &sml, WHITE, BLACK);
     Paint_DrawLine(137, 287, 137, 287, BLACK, DOT_PIXEL_4X4, LINE_STYLE_SOLID);
 
     char decimal[2];
     sprintf(decimal, "%d", ((int)(temperature * 10)) % 10);
-    Paint_DrawString_EN(145, 247, decimal, &bahn_mid, WHITE, BLACK);
+    Paint_DrawString_EN(145, 247, decimal, &mid, WHITE, BLACK);
 
     /* humidity */
-    Paint_DrawNum(240, 220, humidity, &bahn_big, BLACK, WHITE);
-    Paint_DrawString_EN(340, 220, "%", &bahn_sml, WHITE, BLACK);
+    Paint_DrawNum(240, 220, humidity, &big, BLACK, WHITE);
+    Paint_DrawString_EN(340, 220, "%", &sml, WHITE, BLACK);
 #endif
 }
 
@@ -212,17 +216,17 @@ void displayWriteTestResults(float voltage, bool BatteryMode, uint16_t sensorSta
 }
 
 void displayBattery(uint8_t percentage) {
+  char batterpercent[8] = "";
+  dtostrf(percentage, 3, 0, batterpercent);
+  char percent[10] = "%";
+  strcat(batterpercent, percent);
+
 #ifdef EINK_1IN54V2
                 // Xstart,Ystart,Xend,Yend
   Paint_DrawRectangle( 1, 143, 92, 178, BLACK, DOT_PIXEL_2X2, DRAW_FILL_EMPTY); //case
   Paint_DrawRectangle(92, 151, 97, 170, BLACK, DOT_PIXEL_2X2, DRAW_FILL_EMPTY); //nippel
   //Paint_DrawRectangle( 1, 143, 91*(percentage/100.0)+1, 178, BLACK, DOT_PIXEL_1X1, DRAW_FILL_FULL);
-
-  char batterpercent[8] = "";
-  dtostrf(percentage, 3, 0, batterpercent);
-  char percent[10] = "%";
-  strcat(batterpercent, percent);
-  Paint_DrawString_EN(20,149, batterpercent, &bahn_sml, WHITE, BLACK);
+  Paint_DrawString_EN(20,149, batterpercent, &sml, WHITE, BLACK);
 
   /* invert the filled part of the Battery */
   for (int x = (200-(90*(percentage/100.0))); x < (200-2); x++) {
@@ -232,15 +236,20 @@ void displayBattery(uint8_t percentage) {
   }
 #endif
 #ifdef EINK_4IN2
-  Paint_DrawRectangle(225, 10, 330, 34, BLACK, DOT_PIXEL_2X2, DRAW_FILL_EMPTY);
-  Paint_DrawRectangle(330, 14, 335, 30, BLACK, DOT_PIXEL_2X2, DRAW_FILL_EMPTY);
-  Paint_DrawRectangle(225, 10, 105*(percentage/100.0)+225, 34, BLACK, DOT_PIXEL_1X1, DRAW_FILL_FULL);
+  Paint_DrawRectangle(279, 10, 385, 37, BLACK, DOT_PIXEL_2X2, DRAW_FILL_EMPTY); //case
+  Paint_DrawRectangle(385, 16, 390, 31, BLACK, DOT_PIXEL_2X2, DRAW_FILL_EMPTY); //nippel
+  Paint_DrawString_EN(300, 12, batterpercent, &sml, WHITE, BLACK);
 
-  char batterpercent[8] = "";
-  dtostrf(percentage, 3, 0, batterpercent);
-  char percent[10] = "%";
-  strcat(batterpercent, percent);
-  Paint_DrawString_EN(342, 10, batterpercent, &bahn_sml, WHITE, BLACK);
+  /* invert the filled part of the Battery */
+  int X_start=280;
+  int X_end=280+(106*(percentage/100.0));
+  int Y_start=11;
+  int Y_end=35;
+  for (int j = 0; j < Y_end - Y_start; j++) {
+    for (int i = 0; i < (X_end - X_start)/8; i++) {
+      BlackImage[(Y_start + j)*50 + X_start/8 + i] = ~BlackImage[(Y_start + j)*50 + X_start/8 + i];
+    }
+  }
 #endif
 }
 

@@ -90,6 +90,14 @@ extern cFONT Font24CN;
 extern sFONT bahn_big;
 extern sFONT bahn_mid;
 extern sFONT bahn_sml;
+
+extern sFONT nothing_big;
+extern sFONT nothing_mid;
+extern sFONT nothing_sml;
+
+extern sFONT gotham_big;
+extern sFONT gotham_mid;
+extern sFONT gotham_sml;
 // extern const unsigned char Font16_Table[];
 
 #ifdef __cplusplus
