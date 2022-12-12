@@ -357,7 +357,6 @@ void loop() {
 
   updateDisplay(comingFromDeepSleep);
 
-#ifndef TEST_MODE
   if (BatteryMode) {
     if (!comingFromDeepSleep) {
       scd4x.stopPeriodicMeasurement();
@@ -366,7 +365,6 @@ void loop() {
     }
     goto_deep_sleep(29000);
   }
-#endif
 
   goto_light_sleep(4000);
 }
