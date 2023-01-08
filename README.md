@@ -4,6 +4,8 @@
  
 OpenCO2 Sensor is an Arduino IDE compatible Repository for an E-Paper Indoor air quality CO2 Sensor using the ESP32-S2 and an RBG led.
 
+## Buy it [here on Tindie](https://www.tindie.com/products/davidkreidler/open-co2-sensor/)
+
 Especially in winter, when the windows are closed, a reminder to ventilate regularly is useful for health, 
 comfort and well-being. Poor indoor air quality can lead to decreased productivity and learning disabilities.
 Therefore, I developed an ESP32-S2 project that uses an e-paper display to show the indoor CO2 content. 
