@@ -190,30 +190,59 @@ void displayWriteError(char errorMessage[256]){
   Paint_DrawString_EN(5, 40, errorMessage, &Font20, WHITE, BLACK);
 }
 
-void displayWriteTestResults(float voltage, bool BatteryMode, uint16_t sensorStatus) {
+#ifdef TEST_MODE
+void displayWriteTestResults(float voltage, bool BatteryMode, uint16_t sensorStatus, uint16_t serial0, uint16_t serial1, uint16_t serial2) {
   char batteryvolt[8] = "";
   dtostrf(voltage, 1, 3, batteryvolt);
   char volt[10] = "V";
   strcat(batteryvolt, volt);
-  Paint_DrawString_EN(0, 140, batteryvolt, &Font20, WHITE, BLACK);
+  Serial.print(voltage);
+  Serial.print('\t');
+  Paint_DrawString_EN(0, 138, batteryvolt, &Font16, WHITE, BLACK);
 
   char BatteryMode_s[9] = "";
   strcat(BatteryMode_s, "USB-C:");
   strcat(BatteryMode_s, BatteryMode ? "no" : "yes");
-  Paint_DrawString_EN(0, 160, BatteryMode_s, &Font20, WHITE, BLACK);
+  Serial.print(BatteryMode);
+  Serial.print('\t');
+  Paint_DrawString_EN(77, 138, BatteryMode_s, &Font16, WHITE, BLACK);
 
   char sensorStatus_s[20] = "";
   strcat(sensorStatus_s, "SCD4x:");
   if (sensorStatus == 0) {
-    strcat(sensorStatus_s, "good");
+    strcat(sensorStatus_s, "ok");
   } else {
     char snum[5];
     itoa(sensorStatus, snum, 10);
     strcat(sensorStatus_s, snum);
   }
-  Paint_DrawString_EN(0, 180, sensorStatus_s, &Font20, WHITE, BLACK);
-  Paint_DrawNum(158, 180, (int32_t)refreshes, &Font20, BLACK, WHITE);
+  Serial.print(sensorStatus);
+  Serial.print('\t');
+  Paint_DrawString_EN(0, 154, sensorStatus_s, &Font16, WHITE, BLACK);
+
+  char mac[20];
+  snprintf(mac, 20, "MacAdd:%llX", ESP.getEfuseMac());
+  Serial.print(ESP.getEfuseMac(), HEX);
+  Serial.print('\t');
+  Paint_DrawString_EN(0, 176, mac, &Font12, WHITE, BLACK);
+
+  char serial[20]= "Serial:";
+  char hex[4];
+  sprintf(hex, "%4X", serial0);
+  Serial.print(hex);
+  strcat(serial, hex);
+  sprintf(hex, "%4X", serial1);
+  Serial.print(hex);
+  strcat(serial, hex);
+  sprintf(hex, "%4X", serial2);
+  Serial.println(hex);
+  strcat(serial, hex);
+  //Serial.print('\n');
+  Paint_DrawString_EN(0, 188, serial, &Font12, WHITE, BLACK);
+
+  Paint_DrawNum(158, 180, (int32_t)refreshes, &Font16, BLACK, WHITE);
 }
+#endif /*TEST_MODE*/
 
 void displayBattery(uint8_t percentage) {
   char batterpercent[8] = "";

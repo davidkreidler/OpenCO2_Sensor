@@ -56,6 +56,9 @@ RTC_DATA_ATTR int HWSubRev = 1; //default only
 RTC_DATA_ATTR float maxBatteryVoltage;
 #ifdef TEST_MODE
 RTC_DATA_ATTR uint16_t sensorStatus;
+RTC_DATA_ATTR uint16_t serial0;
+RTC_DATA_ATTR uint16_t serial1;
+RTC_DATA_ATTR uint16_t serial2;
 #endif
 
 #ifdef WIFI
@@ -85,6 +88,7 @@ void initOnce() {
   scd4x.stopPeriodicMeasurement();
   //scd4x.performFactoryReset();
   //delay(100);
+  scd4x.getSerialNumber(serial0, serial1, serial2);
   scd4x.performSelfTest(sensorStatus);
 #else
   int welcomeDone = EEPROM.read(0);
@@ -246,6 +250,10 @@ void setup() {
   digitalWrite(DISPLAY_POWER, HIGH);
   DEV_Module_Init();
 
+#ifdef TEST_MODE
+  Serial.begin(921600);
+#endif
+
   /* scd4x */
   Wire.begin(33, 34); // grün, gelb
   scd4x.begin(Wire);
@@ -314,7 +322,9 @@ void loop() {
     displayWriteError(errorMessage);
   } else {
     /* dont update in Battery mode, unless co2 is +- 10 ppm different */
+#ifndef TEST_MODE
     if (BatteryMode && comingFromDeepSleep && (abs(new_co2 - co2) < 10)) goto_deep_sleep(29000);
+#endif
     if (new_co2 > 400) co2 = new_co2;
     setLED(co2);
     displayWriteMeasuerments(co2, temperature, humidity);
@@ -345,7 +355,13 @@ void loop() {
 #endif
 
 #ifdef TEST_MODE
-  displayWriteTestResults(readBatteryVoltage(), BatteryMode, sensorStatus);
+  Serial.print(co2);
+  Serial.print('\t');
+  Serial.print(temperature);
+  Serial.print('\t');
+  Serial.print(humidity);
+  Serial.print('\t');
+  displayWriteTestResults(readBatteryVoltage(), BatteryMode, sensorStatus, serial0, serial1, serial2);
 #else
   /* Print Battery % */
   if (BatteryMode) {
@@ -366,5 +382,9 @@ void loop() {
     goto_deep_sleep(29000);
   }
 
+#ifdef TEST_MODE
+  delay(4000);
+#else
   goto_light_sleep(4000);
+#endif
 }
