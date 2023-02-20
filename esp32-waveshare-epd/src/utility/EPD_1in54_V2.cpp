@@ -251,7 +251,7 @@ parameter:
 ******************************************************************************/
 void EPD_1IN54_V2_Init_Partial(void)
 {
-	EPD_1IN54_V2_Reset();
+    EPD_1IN54_V2_Reset();
 	EPD_1IN54_V2_ReadBusy();
 	
 	EPD_1IN54_V2_SetLut(WF_PARTIAL_1IN54_0);
@@ -268,12 +268,50 @@ void EPD_1IN54_V2_Init_Partial(void)
     EPD_1IN54_V2_SendData(0x00);
 	
     EPD_1IN54_V2_SendCommand(0x3C); //BorderWavefrom
-    EPD_1IN54_V2_SendData(0x80);
+    EPD_1IN54_V2_SendData(0x80); 
 	
-	EPD_1IN54_V2_SendCommand(0x22); 
+    EPD_1IN54_V2_SendCommand(0x22); 
 	EPD_1IN54_V2_SendData(0xc0); 
 	EPD_1IN54_V2_SendCommand(0x20); 
 	EPD_1IN54_V2_ReadBusy();
+}
+
+/******************************************************************************
+function :  Initialize the e-Paper register (Partial display after powerdown)
+parameter:
+******************************************************************************/
+void EPD_1IN54_V2_Init_Partial_After_Powerdown(void)
+{
+    EPD_1IN54_V2_Reset();
+
+    EPD_1IN54_V2_ReadBusy();
+    EPD_1IN54_V2_SendCommand(0x12);  //SWRESET
+    EPD_1IN54_V2_ReadBusy();
+
+    EPD_1IN54_V2_SendCommand(0x01); //Driver output control
+    EPD_1IN54_V2_SendData(0xC7);
+    EPD_1IN54_V2_SendData(0x00);
+    EPD_1IN54_V2_SendData(0x01);
+
+    EPD_1IN54_V2_SendCommand(0x11); //data entry mode
+    EPD_1IN54_V2_SendData(0x01);
+
+    EPD_1IN54_V2_SetWindows(0, EPD_1IN54_V2_HEIGHT-1, EPD_1IN54_V2_WIDTH-1, 0);
+
+    EPD_1IN54_V2_SendCommand(0x3C); //BorderWavefrom
+    EPD_1IN54_V2_SendData(0x01);
+
+    EPD_1IN54_V2_SendCommand(0x18);
+    EPD_1IN54_V2_SendData(0x80);
+
+    EPD_1IN54_V2_SendCommand(0x22); // //Load Temperature and waveform setting.
+    EPD_1IN54_V2_SendData(0XB1);
+    EPD_1IN54_V2_SendCommand(0x20);
+
+    EPD_1IN54_V2_SetCursor(0, EPD_1IN54_V2_HEIGHT-1);
+    EPD_1IN54_V2_ReadBusy();
+    
+    EPD_1IN54_V2_SetLut(WF_PARTIAL_1IN54_0);
 }
 
 /******************************************************************************

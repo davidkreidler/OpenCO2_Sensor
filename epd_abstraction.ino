@@ -50,12 +50,12 @@ void displayWelcome() {
 
 void initEpdOnce() {
 #ifdef EINK_1IN54V2
-  BlackImage = (UBYTE *)malloc(5000);
+  BlackImage = (UBYTE *)malloc(5200);
   Paint_NewImage(BlackImage, EPD_1IN54_V2_WIDTH, EPD_1IN54_V2_HEIGHT, 270, WHITE);
   EPD_1IN54_V2_Init();
 #endif
 #ifdef EINK_4IN2
-  BlackImage = (UBYTE *)malloc(15000);
+  BlackImage = (UBYTE *)malloc(15400);
   Paint_NewImage(BlackImage, EPD_4IN2_WIDTH, EPD_4IN2_HEIGHT, 0, WHITE);
   EPD_4IN2_Init_Fast();
 #endif
@@ -136,7 +136,7 @@ void displayWriteMeasuerments(uint16_t co2, float temperature, float humidity) {
 #endif
     Paint_DrawString_EN(60+offset, 4, unit, &sml, WHITE, BLACK);
     Paint_DrawString_EN(60+offset, 32, ",", &sml, WHITE, BLACK);
-    char decimal[2];
+    char decimal[4];
     sprintf(decimal, "%d", ((int)(temperature * 10)) % 10);
     Paint_DrawString_EN(71+offset, 27, decimal, &sml, WHITE, BLACK);
 
@@ -176,7 +176,7 @@ void displayWriteMeasuerments(uint16_t co2, float temperature, float humidity) {
     Paint_DrawString_EN(140, 220, "*C", &sml, WHITE, BLACK);
     Paint_DrawLine(137, 287, 137, 287, BLACK, DOT_PIXEL_4X4, LINE_STYLE_SOLID);
 
-    char decimal[2];
+    char decimal[4];
     sprintf(decimal, "%d", ((int)(temperature * 10)) % 10);
     Paint_DrawString_EN(145, 247, decimal, &mid, WHITE, BLACK);
 
@@ -293,12 +293,18 @@ void updateDisplay(bool comingFromDeepSleep) {
   }
 #endif
   if (refreshes == 1) {
+    // Full update
     EPD_1IN54_V2_Init();
     EPD_1IN54_V2_DisplayPartBaseImage(BlackImage);
-  } else {
-    EPD_1IN54_V2_Init_Partial();
-    if(comingFromDeepSleep) EPD_1IN54_V2_writePrevImage(BlackImage);
-    EPD_1IN54_V2_DisplayPart(BlackImage); // partial update
+  } else { 
+    // Partial update
+    if(comingFromDeepSleep && HWSubRev > 1) {
+      EPD_1IN54_V2_Init_Partial_After_Powerdown();
+      EPD_1IN54_V2_writePrevImage(BlackImage);
+    } else {
+      EPD_1IN54_V2_Init_Partial();
+    }
+    EPD_1IN54_V2_DisplayPart(BlackImage); 
   }
   EPD_1IN54_V2_Sleep();
 #endif

@@ -27,11 +27,15 @@ Preferences preferences;
 #ifdef WIFI
 #include <WiFi.h>
 #include <WiFiManager.h>
-#include <HTTPClient.h>
-#include <BluetoothSerial.h>
-#include <esp_wifi.h>
-#include <esp_sleep.h>
 WiFiManager wifiManager;
+
+char mqtt_server[40];
+char mqtt_port[6];
+char api_token[34];
+
+WiFiManagerParameter custom_mqtt_server("server", "mqtt server", mqtt_server, 40);
+WiFiManagerParameter custom_mqtt_port("port", "mqtt port", mqtt_port, 6);
+WiFiManagerParameter custom_api_token("apikey", "API token", api_token, 32);
 #endif
 
 /* led */
@@ -63,6 +67,30 @@ RTC_DATA_ATTR uint16_t serial2;
 
 #ifdef WIFI
 #define tempOffset 13.0
+bool shouldSaveConfig = false;
+void saveConfigCallback() {
+  shouldSaveConfig = true;
+}
+
+void saveCredentials() {
+  preferences.begin("co2-sensor", false);
+  preferences.putString("mqtt_server", custom_mqtt_server.getValue());
+  preferences.putString("mqtt_port", custom_mqtt_port.getValue());
+  preferences.putString("api_token", custom_api_token.getValue());
+  preferences.end();
+}
+
+void loadCredentials() {
+  preferences.begin("co2-sensor", true);
+  String s_mqtt_server = preferences.getString("mqtt_server", "");
+  String s_mqtt_port = preferences.getString("mqtt_port", "");
+  String s_api_token = preferences.getString("api_token", "");
+  preferences.end();
+
+  strcpy(mqtt_server, s_mqtt_server.c_str());
+  strcpy(mqtt_port, s_mqtt_port.c_str());
+  strcpy(api_token, s_api_token.c_str());
+}
 #else
 #define tempOffset 4.4 // was 5.8
 #endif
@@ -165,9 +193,9 @@ void lowBatteryMode() {
 
 void goto_deep_sleep(int ms) {
 #ifdef WIFI
-  //WiFi.setSleep(true);
-  WiFi.disconnect(true);  // Disconnect from the network
-  WiFi.mode(WIFI_OFF);    // Switch WiFi off
+  esp_wifi_disconnect();
+  esp_wifi_stop();
+  delay(1);
 #endif
 
   esp_sleep_enable_timer_wakeup(ms * 1000);                             // periodic measurement every 30 sec - 0.83 sec awake
@@ -186,7 +214,7 @@ void goto_deep_sleep(int ms) {
   /* Wakeup by IO0 button */
   rtc_gpio_pullup_en(GPIO_NUM_0);
   rtc_gpio_pulldown_dis(GPIO_NUM_0);
-  esp_sleep_enable_ext1_wakeup(0x1,ESP_EXT1_WAKEUP_ALL_LOW); // 2^0 = GPIO_NUM_0 
+  esp_sleep_enable_ext1_wakeup(0x1,ESP_EXT1_WAKEUP_ALL_LOW); // 2^0 = GPIO_NUM_0
 
   /* Keep LED enabled */
   if (LEDalwaysOn) gpio_hold_en(LED_POWER);
@@ -198,7 +226,7 @@ void goto_deep_sleep(int ms) {
 
 void goto_light_sleep(int ms) {
   comingFromDeepSleep = false;
-#ifdef WIFI
+#if defined(TEST_MODE) || defined(WIFI)
   delay(ms);
 #else
   esp_sleep_enable_timer_wakeup(ms * 1000);                             // periodic measurement every 5 sec -1.1 sec awake
@@ -251,7 +279,7 @@ void setup() {
   DEV_Module_Init();
 
 #ifdef TEST_MODE
-  Serial.begin(921600);
+  Serial.begin(115200);
 #endif
 
   /* scd4x */
@@ -264,17 +292,6 @@ void setup() {
   pinMode(USB_PRESENT, INPUT);
   pinMode(BATTERY_VOLTAGE, INPUT);
   updateBatteryMode();
-
-#ifdef WIFI
-  if (!BatteryMode) {
-    //if (comingFromDeepSleep) {}
-    /*WiFi.mode(WIFI_STA);
-    WiFi.begin(ssid, password);
-    while (WiFi.status() != WL_CONNECTED) delay(500);*/
-    wifiManager.setConfigPortalBlocking(false);
-    wifiManager.autoConnect("CO2Sensor");
-  }
-#endif
 
   strip.begin();
   if (esp_sleep_get_wakeup_cause() == ESP_SLEEP_WAKEUP_EXT1) {
@@ -293,6 +310,26 @@ void setup() {
     /* Wait for co2 measurement */
     delay(5000);
   }
+
+#ifdef WIFI
+  if (!BatteryMode) {
+    /*WiFi.mode(WIFI_STA);
+    WiFi.begin(ssid, password);
+    while (WiFi.status() != WL_CONNECTED) delay(500);
+    Serial.println(WiFi.localIP());*/
+
+    wifiManager.setSaveConfigCallback([]() {
+      saveCredentials();
+    });
+  
+    wifiManager.setSaveConfigCallback(saveConfigCallback);
+    wifiManager.addParameter(&custom_mqtt_server);
+    wifiManager.addParameter(&custom_mqtt_port);
+    wifiManager.addParameter(&custom_api_token);
+    wifiManager.setConfigPortalBlocking(false);
+    wifiManager.autoConnect("OpenCO2 Sensor");
+  }
+#endif /* WIFI */
 }
 
 uint16_t new_co2 = 0;
@@ -331,27 +368,15 @@ void loop() {
   }
 
 #ifdef WIFI
-  if (!error && !BatteryMode) {
+/*  if (!error && !BatteryMode) {
     if (WiFi.status() == WL_CONNECTED) {
       String payload = "{\"wifi\":" + String(WiFi.RSSI()) + ",";
-      payload=payload+"\"pm02\":" + "100";
-      payload=payload+",";
       payload=payload+"\"rco2\":" + String(co2);
       payload=payload+",";
       payload=payload+"\"atmp\":" + String(temperature) +   ",\"rhum\":" + String(humidity);
       payload=payload+"}";
-
-      String APIROOT = "http://10.0.0.4:9925/";
-      String POSTURL = APIROOT + "sensors/airgradient:" + "1995c6" + "/measures";
-      WiFiClient client;
-      HTTPClient http;
-      http.begin(client, POSTURL);
-      http.addHeader("content-type", "application/json");
-      int httpCode = http.POST(payload);
-      String response = http.getString();
-      http.end();
     }
-  }
+  }*/
 #endif
 
 #ifdef TEST_MODE
@@ -366,7 +391,7 @@ void loop() {
   /* Print Battery % */
   if (BatteryMode) {
     float voltage = readBatteryVoltage();
-    if (voltage < 3.1) lowBatteryMode();
+    if (voltage < 3.2) lowBatteryMode();
     displayBattery(calcBatteryPercentage(voltage));
   }
 #endif /* TEST_MODE */
@@ -382,9 +407,5 @@ void loop() {
     goto_deep_sleep(29000);
   }
 
-#ifdef TEST_MODE
-  delay(4000);
-#else
   goto_light_sleep(4000);
-#endif
 }
