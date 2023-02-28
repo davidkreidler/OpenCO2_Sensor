@@ -29,6 +29,20 @@ Preferences preferences;
 #include <WiFiManager.h>
 WiFiManager wifiManager;
 
+//#define airgradient
+#ifdef airgradient
+/* use https://github.com/geerlingguy/internet-pi to store values */
+#include <WebServer.h>
+#include <SPIFFS.h>
+const int port = 9925;
+WebServer server(port);
+#endif /* airgradient */
+
+//#define MQTT
+#ifdef MQTT
+#include <ArduinoMqttClient.h>
+WiFiClient wifiClient;
+MqttClient mqttClient(wifiClient);
 char mqtt_server[40];
 char mqtt_port[6];
 char api_token[34];
@@ -36,7 +50,8 @@ char api_token[34];
 WiFiManagerParameter custom_mqtt_server("server", "mqtt server", mqtt_server, 40);
 WiFiManagerParameter custom_mqtt_port("port", "mqtt port", mqtt_port, 6);
 WiFiManagerParameter custom_api_token("apikey", "API token", api_token, 32);
-#endif
+#endif /* MQTT */
+#endif /* WIFI */
 
 /* led */
 #include <Adafruit_DotStar.h>
@@ -65,6 +80,10 @@ RTC_DATA_ATTR uint16_t serial1;
 RTC_DATA_ATTR uint16_t serial2;
 #endif
 
+uint16_t new_co2 = 0;
+float temperature = 0.0f;
+float humidity = 0.0f;
+
 #ifdef WIFI
 #define tempOffset 13.0
 bool shouldSaveConfig = false;
@@ -72,6 +91,56 @@ void saveConfigCallback() {
   shouldSaveConfig = true;
 }
 
+#ifdef airgradient
+String GenerateMetrics() {
+  String message = "";
+  String idString = "{id=\"" + String("Open CO2 Sensor") + "\",mac=\"" + WiFi.macAddress().c_str() + "\"}";
+
+  message += "# HELP rco2 CO2 value, in ppm\n";
+  message += "# TYPE rco2 gauge\n";
+  message += "rco2";
+  message += idString;
+  message += String(co2);
+  message += "\n";
+
+  message += "# HELP atmp Temperature, in degrees Celsius\n";
+  message += "# TYPE atmp gauge\n";
+  message += "atmp";
+  message += idString;
+  message += String(temperature);
+  message += "\n";
+
+  message += "# HELP rhum Relative humidity, in percent\n";
+  message += "# TYPE rhum gauge\n";
+  message += "rhum";
+  message += idString;
+  message += String(humidity);
+  message += "\n";
+
+  return message;
+}
+
+void HandleRoot() {
+  server.send(200, "text/plain", GenerateMetrics() );
+}
+
+void HandleNotFound() {
+  String message = "File Not Found\n\n";
+  message += "URI: ";
+  message += server.uri();
+  message += "\nMethod: ";
+  message += (server.method() == HTTP_GET) ? "GET" : "POST";
+  message += "\nArguments: ";
+  message += server.args();
+  message += "\n";
+  for (uint i = 0; i < server.args(); i++) {
+    message += " " + server.argName(i) + ": " + server.arg(i) + "\n";
+  }
+  server.send(404, "text/html", message);
+}
+#endif /* airgradient */
+
+#ifdef MQTT
 void saveCredentials() {
   preferences.begin("co2-sensor", false);
   preferences.putString("mqtt_server", custom_mqtt_server.getValue());
@@ -91,9 +160,10 @@ void loadCredentials() {
   strcpy(mqtt_port, s_mqtt_port.c_str());
   strcpy(api_token, s_api_token.c_str());
 }
+#endif /* MQTT */
 #else
 #define tempOffset 4.4 // was 5.8
-#endif
+#endif /* WIFI */
 
 void initOnce() {
   initEpdOnce();
@@ -319,22 +389,39 @@ void setup() {
     Serial.println(WiFi.localIP());*/
 
     wifiManager.setSaveConfigCallback([]() {
+#ifdef MQTT 
       saveCredentials();
+#endif
     });
   
     wifiManager.setSaveConfigCallback(saveConfigCallback);
+#ifdef MQTT
     wifiManager.addParameter(&custom_mqtt_server);
     wifiManager.addParameter(&custom_mqtt_port);
     wifiManager.addParameter(&custom_api_token);
+#endif /* MQTT */
     wifiManager.setConfigPortalBlocking(false);
     wifiManager.autoConnect("OpenCO2 Sensor");
+
+#ifdef MQTT
+    loadCredentials();
+    if(mqtt_server[0] != '\0' && mqtt_port[0] != '\0'){
+        mqttClient.connect(mqtt_server, (int)mqtt_port);
+    }
+#endif /* MQTT */
+
+#ifdef airgradient
+    server.on("/", HandleRoot);
+    server.on("/metrics", HandleRoot);
+    server.onNotFound(HandleNotFound);
+    server.begin();
+    Serial.println("HTTP server started at ip " + WiFi.localIP().toString() + ":" + String(port));
+#endif /* airgradient */
+
   }
 #endif /* WIFI */
 }
 
-uint16_t new_co2 = 0;
-float temperature = 0.0f;
-float humidity = 0.0f;
 
 void loop() {
   updateBatteryMode(); // check again in USB Power mode
@@ -368,16 +455,30 @@ void loop() {
   }
 
 #ifdef WIFI
-/*  if (!error && !BatteryMode) {
+#ifdef MQTT
+  if (!error && !BatteryMode) {
     if (WiFi.status() == WL_CONNECTED) {
-      String payload = "{\"wifi\":" + String(WiFi.RSSI()) + ",";
-      payload=payload+"\"rco2\":" + String(co2);
-      payload=payload+",";
-      payload=payload+"\"atmp\":" + String(temperature) +   ",\"rhum\":" + String(humidity);
-      payload=payload+"}";
+      mqttClient.beginMessage("co2_ppm");
+      mqttClient.print(co2);
+      mqttClient.endMessage();
+      mqttClient.beginMessage("temperature");
+      mqttClient.print(temperature);
+      mqttClient.endMessage();
+      mqttClient.beginMessage("humidity");
+      mqttClient.print(humidity);
+      mqttClient.endMessage();
     }
-  }*/
-#endif
+  }
+#endif /* MQTT */
+
+#ifdef airgradient
+  if (!error && !BatteryMode) {
+    if (WiFi.status() == WL_CONNECTED) {
+      server.handleClient();
+    }
+  }
+#endif /* airgradient */
+#endif /* WIFI */
 
 #ifdef TEST_MODE
   Serial.print(co2);
