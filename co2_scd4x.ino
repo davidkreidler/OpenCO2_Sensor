@@ -69,7 +69,6 @@ RTC_DATA_ATTR bool initDone = false;
 RTC_DATA_ATTR bool BatteryMode = false;
 RTC_DATA_ATTR bool comingFromDeepSleep = false;
 RTC_DATA_ATTR int ledbrightness = 5;
-RTC_DATA_ATTR uint16_t co2 = 400;
 RTC_DATA_ATTR bool LEDalwaysOn = false;
 RTC_DATA_ATTR int HWSubRev = 1; //default only
 RTC_DATA_ATTR float maxBatteryVoltage;
@@ -80,9 +79,9 @@ RTC_DATA_ATTR uint16_t serial1;
 RTC_DATA_ATTR uint16_t serial2;
 #endif
 
-uint16_t new_co2 = 0;
-float temperature = 0.0f;
-float humidity = 0.0f;
+RTC_DATA_ATTR uint16_t co2 = 400;
+RTC_DATA_ATTR float temperature = 0.0f;
+RTC_DATA_ATTR float humidity = 0.0f;
 
 #ifdef WIFI
 #define tempOffset 13.0
@@ -208,7 +207,7 @@ void initOnce() {
   initDone = true;
 }
 
-void setLED(uint16_t co2_value) {
+void setLED(uint16_t co2) {
   if (BatteryMode && !LEDalwaysOn) {
     digitalWrite(LED_POWER, HIGH); // LED OFF
     strip.clear();
@@ -220,11 +219,11 @@ void setLED(uint16_t co2_value) {
 
   int red = 0, green = 0, blue = 0;
 
-  if (co2_value > 2000) {
+  if (co2 > 2000) {
     red = 216; green = 2; blue = 131; // magenta
   } else {
-    red   =   pow((co2_value - 400), 2) / 10000;
-    green = - pow((co2_value - 400), 2) / 4500 + 255;
+    red   =   pow((co2 - 400), 2) / 10000;
+    green = - pow((co2 - 400), 2) / 4500 + 255;
   }
   if (red < 0) red = 0;
   if (red > 255) red = 255;
@@ -439,17 +438,24 @@ void loop() {
   }
 
   // Read co2 Measurement
-  uint16_t error = scd4x.readMeasurement(new_co2, temperature, humidity);
+  uint16_t new_co2 = 400;
+  float new_temperature = 0.0f;
+  uint16_t error = scd4x.readMeasurement(new_co2, new_temperature, humidity);
   if (error) {
     char errorMessage[256];
     errorToString(error, errorMessage, 256);
     displayWriteError(errorMessage);
   } else {
-    /* dont update in Battery mode, unless co2 is +- 10 ppm different */
+    /* dont update in Battery mode, unless CO2 has changed by 10ppm or temperature by 0.5°C */
 #ifndef TEST_MODE
-    if (BatteryMode && comingFromDeepSleep && (abs(new_co2 - co2) < 10)) goto_deep_sleep(29000);
+    if (BatteryMode && comingFromDeepSleep) {
+      if ((abs(new_co2 - co2) < 10) && (fabs(new_temperature - temperature) < 0.5)) {
+        goto_deep_sleep(30000);
+      }
+    }
 #endif
     if (new_co2 > 400) co2 = new_co2;
+    temperature = new_temperature;
     setLED(co2);
     displayWriteMeasuerments(co2, temperature, humidity);
   }
