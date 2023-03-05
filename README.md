@@ -36,42 +36,25 @@ Thus, push notifications windows (open / close) and long-term measurements are p
 
 # Update to the latest release
 
-1. Download and unzip [esptool](https://github.com/espressif/esptool)
-2. Download the all `.bin` files from the latest [release](https://github.com/davidkreidler/OpenCO2_Sensor/releases)
-3. Make sure, that the power switch is in the `ON` position (down)
-4. Plug a data USB-C cable into your PC and the Sensor
-5. Hold the Button on the backside of the CO2 Sensor near the USB-C port and push simultaneously the reset ↪️ Button
-6. Release the reset ↪️ Button first and then the other one
-7. Run the following commands in the folder containing the `.bin` and `esptool`
-   port for Windows: `COM7` or Linux: `/dev/ttyUSB0`|`/dev/ttyACM0`
-```
-$ python3 -m pip install pyserial
-$ python3 esptool.py --chip esp32s2 --port [COM7|/dev/ttyUSB0|/dev/ttyACM0] --baud 921600 --before default_reset --after hard_reset write_flash -z --flash_mode dio --flash_freq 80m --flash_size 4MB 0xe000 boot_app0.bin 0x1000 co2_scd4x.ino.bootloader.bin 0x10000 co2_scd4x.ino.bin 0x8000 co2_scd4x.ino.partitions.bin
-```
-7. Afterwards push the reset ↪️ Button
+1. Download all files from the latest [release](https://github.com/davidkreidler/OpenCO2_Sensor/releases)
+2. Make sure, that the power switch is in the `ON` position (down)
+3. Plug a data USB-C cable into your PC and the Sensor
+4. Hold the Button on the backside of the CO2 Sensor near the USB-C port and shortly push simultaneously the reset ↪️ Button
+5. Run `update.bat` or `update_wifi.bat` if you would like to use Wi-Fi.
+6. Afterwards push the reset ↪️ Button
 
-# Installation
+# Installation inside the Arduino IDE
 
 1. Copy the esp32-waveshare-epd Folder to your `Arduino/libraries/`
 2. [Install the ESP32-S2 support for Arduino IDE](https://espressif-docs.readthedocs-hosted.com/projects/arduino-esp32/en/latest/installing.html)
 3. Choose `ESP32S2 Dev Module` under `Tools -> Boards -> ESP32 Arduino`
-4. Connect the Sensor as described in step "Programming via Arduino IDE" and choose the new Port under `Tools -> Boards -> Port`
+4. Connect the Sensor as described in step "Update to the latest release" and choose the new Port under `Tools -> Boards -> Port`
 
 # Dependencies
 
 * [Adafruit DotStar version 1.1.5](https://github.com/adafruit/Adafruit_DotStar/tree/1.1.5)
 * [Sensirion Core](https://github.com/Sensirion/arduino-core)
 * [Sensirion I2C SCD4x Arduino Library](https://github.com/Sensirion/arduino-i2c-scd4x)
-
-# Programming via Arduino IDE
-
-* Make sure, that the power switch is in the `ON` position (down)
-* Plug a data USB cable into your PC and the Sensor
-* Hold the Button on the backside of the CO2 Sensor near the USB-C port and push simultaneously the reset ↪️ Button
-* Release the reset ↪️ Button first and then the other one
-
-* Click `Upload` in the Arduino IDE and wait
-* Afterwards push the reset ↪️ Button
 
 # German translation OpenCO2 Sensor
 
