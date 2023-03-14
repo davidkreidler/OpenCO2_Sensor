@@ -292,6 +292,7 @@ void updateDisplay(bool comingFromDeepSleep) {
     }
   }
 #endif
+  if (comingFromDeepSleep && !BatteryMode) refreshes = 1;
   if (refreshes == 1) {
     // Full update
     EPD_1IN54_V2_Init();

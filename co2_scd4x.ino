@@ -460,6 +460,23 @@ void loop() {
     displayWriteMeasuerments(co2, temperature, humidity);
   }
 
+/* Only run this, if calibration is needed!
+  Connect the Sensor to Power and let it run outside for 5 minutes.
+ */
+//#define calibrate_co2
+#ifdef calibrate_co2
+    extern int refreshes;
+    if (refreshes == 40){ // > 3 min
+    scd4x.stopPeriodicMeasurement();
+    delay(500);
+    uint16_t frcCorrection;
+    scd4x.performForcedRecalibration((uint16_t)420, frcCorrection);    
+    //Serial.println("forced recalibration done");
+    delay(400);
+    scd4x.startPeriodicMeasurement();
+  }
+#endif /* calibrate_co2 */
+
 #ifdef WIFI
 #ifdef MQTT
   if (!error && !BatteryMode) {
