@@ -52,7 +52,7 @@ Thus, push notifications windows (open / close) and long-term measurements are p
 
 # Dependencies
 
-* [Adafruit DotStar version 1.1.5](https://github.com/adafruit/Adafruit_DotStar/tree/1.1.5)
+* [Adafruit DotStar](https://github.com/adafruit/Adafruit_DotStar)
 * [Sensirion Core](https://github.com/Sensirion/arduino-core)
 * [Sensirion I2C SCD4x Arduino Library](https://github.com/Sensirion/arduino-i2c-scd4x)
 
