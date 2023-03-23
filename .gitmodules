@@ -1,0 +1,3 @@
+[submodule "OpenCO2_Sensor_esphome"]
+	path = OpenCO2_Sensor_esphome
+	url = https://github.com/Yourigh/OpenCO2_Sensor_esphome
