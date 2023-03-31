@@ -1,7 +1,9 @@
 # OpenCO2 Sensor using ESP32 and SCD4x
 
+[![Build OpenCO2_Sensor](https://github.com/davidkreidler/OpenCO2_Sensor/actions/workflows/arduino_build.yml/badge.svg)](https://github.com/davidkreidler/OpenCO2_Sensor/actions/workflows/arduino_build.yml)
+
 ![alt text](https://github.com/davidkreidler/OpenCO2_Sensor/raw/main/pictures/Header.png)
- 
+
 OpenCO2 Sensor is an Arduino IDE compatible Repository for an E-Ink Indoor air quality CO2 Sensor using the ESP32-S2 and an RBG LED.
 
 ## Buy it [here on Tindie](https://www.tindie.com/products/davidkreidler/open-co2-sensor/)
