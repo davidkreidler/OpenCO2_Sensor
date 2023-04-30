@@ -25,6 +25,7 @@ sFONT mid=bahn_mid; //gotham_mid nothing_mid bahn_mid
 sFONT sml=bahn_sml; //gotham_sml nothing_sml bahn_sml
 
 void displayWelcome() {
+  initEpdOnce();
 #ifdef EINK_1IN54V2
   Paint_DrawBitMap(gImage_welcome);
   EPD_1IN54_V2_Display(BlackImage);
@@ -35,7 +36,7 @@ void displayWelcome() {
   EPD_4IN2_Display(BlackImage);
   EPD_4IN2_Sleep();
 #endif*/
-
+  EEPROM.begin(2); // EEPROM_SIZE
   EEPROM.write(0, 1);
   EEPROM.commit();
 
@@ -190,7 +191,7 @@ void displayWriteError(char errorMessage[256]){
   Paint_DrawString_EN(5, 40, errorMessage, &Font20, WHITE, BLACK);
 }
 
-#ifdef TEST_MODE
+/* TEST_MODE */
 void displayWriteTestResults(float voltage, bool BatteryMode, uint16_t sensorStatus, uint16_t serial0, uint16_t serial1, uint16_t serial2) {
   char batteryvolt[8] = "";
   dtostrf(voltage, 1, 3, batteryvolt);
@@ -242,7 +243,6 @@ void displayWriteTestResults(float voltage, bool BatteryMode, uint16_t sensorSta
 
   Paint_DrawNum(158, 180, (int32_t)refreshes, &Font16, BLACK, WHITE);
 }
-#endif /*TEST_MODE*/
 
 void displayBattery(uint8_t percentage) {
   char batterpercent[8] = "";

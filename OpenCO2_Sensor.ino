@@ -15,7 +15,6 @@
 #define LED_POWER GPIO_NUM_9
 #define USB_PRESENT GPIO_NUM_4
 #define BATTERY_VOLTAGE GPIO_NUM_5
-//#define TEST_MODE
 
 /* welcome */
 #include <EEPROM.h>
@@ -72,12 +71,13 @@ RTC_DATA_ATTR int ledbrightness = 5;
 RTC_DATA_ATTR bool LEDalwaysOn = false;
 RTC_DATA_ATTR int HWSubRev = 1; //default only
 RTC_DATA_ATTR float maxBatteryVoltage;
-#ifdef TEST_MODE
+
+/* TEST_MODE */
+RTC_DATA_ATTR bool TEST_MODE = false;
 RTC_DATA_ATTR uint16_t sensorStatus;
 RTC_DATA_ATTR uint16_t serial0;
 RTC_DATA_ATTR uint16_t serial1;
 RTC_DATA_ATTR uint16_t serial2;
-#endif
 
 RTC_DATA_ATTR uint16_t co2 = 400;
 RTC_DATA_ATTR float temperature = 0.0f;
@@ -167,30 +167,32 @@ void loadCredentials() {
 void initOnce() {
   initEpdOnce();
   EEPROM.begin(2); // EEPROM_SIZE
-#ifdef TEST_MODE
-  EEPROM.write(0, 0); //reset welcome
-  //EEPROM.write(1, 2); //write HWSubRev 2
-  EEPROM.commit();
-  preferences.begin("co2-sensor", true); 
-  preferences.putFloat("MBV", 3.95); //default maxBatteryVoltage
-  preferences.end();
-  
-  digitalWrite(LED_POWER, LOW); //LED on
-  strip.begin();
-  strip.setPixelColor(0, 5, 5, 5); //index, green, red, blue
-  strip.show();
 
-  displayInitTestMode();
-
-  scd4x.stopPeriodicMeasurement();
-  //scd4x.performFactoryReset();
-  //delay(100);
-  scd4x.getSerialNumber(serial0, serial1, serial2);
-  scd4x.performSelfTest(sensorStatus);
-#else
   int welcomeDone = EEPROM.read(0);
-  if (welcomeDone != 1) displayWelcome();
-#endif /* TEST_MODE */
+  if (welcomeDone != 1) TEST_MODE = true;
+
+  if (TEST_MODE) {
+    EEPROM.write(0, 0); //reset welcome
+    //EEPROM.write(1, 2); //write HWSubRev 2
+    EEPROM.commit();
+    preferences.begin("co2-sensor", true); 
+    preferences.putFloat("MBV", 3.95); //default maxBatteryVoltage
+    preferences.end();
+    
+    digitalWrite(LED_POWER, LOW); //LED on
+    strip.begin();
+    strip.setPixelColor(0, 5, 5, 5); //index, green, red, blue
+    strip.show();
+
+    displayInitTestMode();
+
+    scd4x.stopPeriodicMeasurement();
+    //scd4x.performFactoryReset();
+    //delay(100);
+    scd4x.getSerialNumber(serial0, serial1, serial2);
+    scd4x.performSelfTest(sensorStatus);
+  }
+  
   HWSubRev = EEPROM.read(1);
   preferences.begin("co2-sensor", true); 
   maxBatteryVoltage = preferences.getFloat("MBV", 3.95);
@@ -295,7 +297,13 @@ void goto_deep_sleep(int ms) {
 
 void goto_light_sleep(int ms) {
   comingFromDeepSleep = false;
-#if defined(TEST_MODE) || defined(WIFI)
+
+  if (TEST_MODE) {
+    delay(ms);
+    return;
+  }
+
+#ifdef WIFI
   delay(ms);
 #else
   esp_sleep_enable_timer_wakeup(ms * 1000);                             // periodic measurement every 5 sec -1.1 sec awake
@@ -307,8 +315,6 @@ void goto_light_sleep(int ms) {
   esp_sleep_pd_config(ESP_PD_DOMAIN_VDDSDIO, ESP_PD_OPTION_OFF);
   esp_light_sleep_start();
 #endif
-  //free(BlackImage);
-  //BlackImage = NULL;
 }
 
 void updateBatteryMode() {
@@ -347,15 +353,15 @@ void setup() {
   digitalWrite(DISPLAY_POWER, HIGH);
   DEV_Module_Init();
 
-#ifdef TEST_MODE
-  Serial.begin(115200);
-#endif
-
   /* scd4x */
   Wire.begin(33, 34); // grün, gelb
   scd4x.begin(Wire);
 
   if (!initDone) initOnce();
+
+#if ARDUINO_USB_CDC_ON_BOOT && !ARDUINO_USB_MODE
+  if (TEST_MODE) Serial.begin(115200);
+#endif
 
   /* power */
   pinMode(USB_PRESENT, INPUT);
@@ -364,6 +370,7 @@ void setup() {
 
   strip.begin();
   if (esp_sleep_get_wakeup_cause() == ESP_SLEEP_WAKEUP_EXT1) {
+    if (TEST_MODE) displayWelcome(); // exit TEST_MODE via IO button
     LEDalwaysOn = !LEDalwaysOn;
     setLED(co2);
     delay(1000);
@@ -447,13 +454,12 @@ void loop() {
     displayWriteError(errorMessage);
   } else {
     /* dont update in Battery mode, unless CO2 has changed by 10ppm or temperature by 0.5°C */
-#ifndef TEST_MODE
-    if (BatteryMode && comingFromDeepSleep) {
+    if (!TEST_MODE && BatteryMode && comingFromDeepSleep) {
       if ((abs(new_co2 - co2) < 10) && (fabs(new_temperature - temperature) < 0.5)) {
         goto_deep_sleep(30000);
       }
     }
-#endif
+
     if (new_co2 > 400) co2 = new_co2;
     temperature = new_temperature;
     setLED(co2);
@@ -503,22 +509,24 @@ void loop() {
 #endif /* airgradient */
 #endif /* WIFI */
 
-#ifdef TEST_MODE
-  Serial.print(co2);
-  Serial.print('\t');
-  Serial.print(temperature);
-  Serial.print('\t');
-  Serial.print(humidity);
-  Serial.print('\t');
-  displayWriteTestResults(readBatteryVoltage(), BatteryMode, sensorStatus, serial0, serial1, serial2);
-#else
-  /* Print Battery % */
-  if (BatteryMode) {
-    float voltage = readBatteryVoltage();
-    if (voltage < 3.2) lowBatteryMode();
-    displayBattery(calcBatteryPercentage(voltage));
+  if (TEST_MODE) {
+#if ARDUINO_USB_CDC_ON_BOOT && !ARDUINO_USB_MODE
+    Serial.print(co2);
+    Serial.print('\t');
+    Serial.print(temperature);
+    Serial.print('\t');
+    Serial.print(humidity);
+    Serial.print('\t');
+#endif
+    displayWriteTestResults(readBatteryVoltage(), BatteryMode, sensorStatus, serial0, serial1, serial2);
+  } else {
+    /* Print Battery % */
+    if (BatteryMode) {
+      float voltage = readBatteryVoltage();
+      if (voltage < 3.2) lowBatteryMode();
+      displayBattery(calcBatteryPercentage(voltage));
+    }
   }
-#endif /* TEST_MODE */
 
   updateDisplay(comingFromDeepSleep);
 
