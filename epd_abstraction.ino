@@ -237,7 +237,7 @@ void displayWriteTestResults(float voltage, bool BatteryMode, uint16_t sensorSta
   Paint_DrawString_EN(0, 176, mac, &Font12, WHITE, BLACK);
 
   char serial[20]= "Serial:";
-  char hex[4];
+  char hex[5];
   sprintf(hex, "%4X", serial0);
   Serial.print(hex);
   strcat(serial, hex);
