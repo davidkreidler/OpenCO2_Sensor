@@ -347,6 +347,34 @@ uint8_t calcBatteryPercentage(float voltage) {
     return 100;
 }
 
+void rainbowMode() {
+  displayRainbow();
+  digitalWrite(DISPLAY_POWER, LOW);
+  scd4x.stopPeriodicMeasurement();
+  scd4x.powerDown();
+  digitalWrite(LED_POWER, LOW); //LED ON
+
+  for(int j = 0; j < 256; j++) {
+    int red = 1, green = 0, blue = 0;
+
+    if (j < 85) {
+      red = ((float)j / 85.0f) * 255.0f;
+      blue = 255 - red;
+    } else if (j < 170) {
+      green = ((float)(j - 85) / 85.0f) * 255.0f;
+      red = 255 - green;
+    } else if (j < 256) {
+      blue = ((float)(j - 170) / 85.0f) * 255.0f;
+      green = 255 - blue;
+    }
+
+    strip.setPixelColor(0, green, red, blue);
+    strip.show();
+    if (j == 255) j=0;
+    delay(20);
+  }
+}
+
 void setup() {
   pinMode(DISPLAY_POWER, OUTPUT);
   pinMode(LED_POWER, OUTPUT);
@@ -371,6 +399,15 @@ void setup() {
   strip.begin();
   if (esp_sleep_get_wakeup_cause() == ESP_SLEEP_WAKEUP_EXT1) {
     if (TEST_MODE) displayWelcome(); // exit TEST_MODE via IO button
+
+    pinMode(GPIO_NUM_0, INPUT_PULLUP);
+    int secPressed = 0;
+    while (digitalRead(GPIO_NUM_0) == 0) {
+      if (secPressed == 4) rainbowMode();
+      secPressed++;
+      delay(1000);
+    }
+
     LEDalwaysOn = !LEDalwaysOn;
     setLED(co2);
     delay(1000);

@@ -49,6 +49,15 @@ void displayWelcome() {
   esp_deep_sleep_start();
 }
 
+void displayRainbow() {
+#ifdef EINK_1IN54V2
+  EPD_1IN54_V2_Init();
+  Paint_DrawBitMap(gImage_rainbow);
+  EPD_1IN54_V2_Display(BlackImage);
+  EPD_1IN54_V2_Sleep();
+#endif
+}
+
 void initEpdOnce() {
 #ifdef EINK_1IN54V2
   BlackImage = (UBYTE *)malloc(5200);

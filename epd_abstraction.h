@@ -13,5 +13,6 @@ void displayWriteMeasuerments(uint16_t co2, uint16_t temperature, uint16_t humid
 void displayWriteTestResults(float voltage, bool BatteryMode, uint16_t sensorStatus, uint16_t serial0, uint16_t serial1, uint16_t serial2);
 void displayBattery(uint8_t percentage);
 void updateDisplay(bool comingFromDeepSleep);
+void displayRainbow();
 
 #endif /* EPD_ABSTRACTION_H */
