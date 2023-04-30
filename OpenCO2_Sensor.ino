@@ -28,7 +28,7 @@ Preferences preferences;
 #include <WiFiManager.h>
 WiFiManager wifiManager;
 
-//#define airgradient
+#define airgradient
 #ifdef airgradient
 /* use https://github.com/geerlingguy/internet-pi to store values */
 #include <WebServer.h>
@@ -490,9 +490,9 @@ void loop() {
     errorToString(error, errorMessage, 256);
     displayWriteError(errorMessage);
   } else {
-    /* dont update in Battery mode, unless CO2 has changed by 10ppm or temperature by 0.5°C */
+    /* dont update in Battery mode, unless CO2 has changed by 3% or temperature by 0.5°C */
     if (!TEST_MODE && BatteryMode && comingFromDeepSleep) {
-      if ((abs(new_co2 - co2) < 10) && (fabs(new_temperature - temperature) < 0.5)) {
+      if ((abs(new_co2 - co2) < (0.03*co2)) && (fabs(new_temperature - temperature) < 0.5)) {
         goto_deep_sleep(30000);
       }
     }
