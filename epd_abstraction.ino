@@ -201,7 +201,7 @@ void displayWriteError(char errorMessage[256]){
 }
 
 /* TEST_MODE */
-void displayWriteTestResults(float voltage, bool BatteryMode, uint16_t sensorStatus, uint16_t serial0, uint16_t serial1, uint16_t serial2) {
+void displayWriteTestResults(float voltage, uint16_t sensorStatus, uint16_t serial0, uint16_t serial1, uint16_t serial2) {
   char batteryvolt[8] = "";
   dtostrf(voltage, 1, 3, batteryvolt);
   char volt[10] = "V";
@@ -291,7 +291,7 @@ void displayBattery(uint8_t percentage) {
 #endif
 }
 
-void updateDisplay(bool comingFromDeepSleep) {
+void updateDisplay() {
 #ifdef EINK_1IN54V2
 //#define invertDisplay
 #ifdef invertDisplay
@@ -306,7 +306,7 @@ void updateDisplay(bool comingFromDeepSleep) {
     // Full update
     EPD_1IN54_V2_Init();
     EPD_1IN54_V2_DisplayPartBaseImage(BlackImage);
-  } else { 
+  } else {
     // Partial update
     if(comingFromDeepSleep && HWSubRev > 1) {
       EPD_1IN54_V2_Init_Partial_After_Powerdown();
@@ -314,7 +314,7 @@ void updateDisplay(bool comingFromDeepSleep) {
     } else {
       EPD_1IN54_V2_Init_Partial();
     }
-    EPD_1IN54_V2_DisplayPart(BlackImage); 
+    EPD_1IN54_V2_DisplayPart(BlackImage);
   }
   EPD_1IN54_V2_Sleep();
 #endif

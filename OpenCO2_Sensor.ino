@@ -65,11 +65,11 @@ Adafruit_DotStar strip(1, 40, 39, DOTSTAR_BRG); // numLEDs, DATAPIN, CLOCKPIN
 SensirionI2CScd4x scd4x;
 
 RTC_DATA_ATTR bool initDone = false;
-RTC_DATA_ATTR bool BatteryMode = false;
-RTC_DATA_ATTR bool comingFromDeepSleep = false;
+RTC_DATA_ATTR extern bool BatteryMode = false;
+RTC_DATA_ATTR extern bool comingFromDeepSleep = false;
 RTC_DATA_ATTR int ledbrightness = 5;
 RTC_DATA_ATTR bool LEDalwaysOn = false;
-RTC_DATA_ATTR int HWSubRev = 1; //default only
+RTC_DATA_ATTR extern int HWSubRev = 1; //default only
 RTC_DATA_ATTR float maxBatteryVoltage;
 
 /* TEST_MODE */
@@ -178,7 +178,7 @@ void initOnce() {
     preferences.begin("co2-sensor", true); 
     preferences.putFloat("MBV", 3.95); //default maxBatteryVoltage
     preferences.end();
-    
+
     digitalWrite(LED_POWER, LOW); //LED on
     strip.begin();
     strip.setPixelColor(0, 5, 5, 5); //index, green, red, blue
@@ -192,9 +192,9 @@ void initOnce() {
     scd4x.getSerialNumber(serial0, serial1, serial2);
     scd4x.performSelfTest(sensorStatus);
   }
-  
+
   HWSubRev = EEPROM.read(1);
-  preferences.begin("co2-sensor", true); 
+  preferences.begin("co2-sensor", true);
   maxBatteryVoltage = preferences.getFloat("MBV", 3.95);
   preferences.end();
 
@@ -329,7 +329,7 @@ float readBatteryVoltage() {
 
   if ((voltage > maxBatteryVoltage) && (voltage < 4.2) && (digitalRead(USB_PRESENT) == LOW)) {
      maxBatteryVoltage = voltage;
-     preferences.begin("co2-sensor", false); 
+     preferences.begin("co2-sensor", false);
      preferences.putFloat("MBV", voltage); //save maxBatteryVoltage
      preferences.end();
   }
@@ -337,7 +337,7 @@ float readBatteryVoltage() {
 }
 
 uint8_t calcBatteryPercentage(float voltage) {
-  voltage += (4.2 - maxBatteryVoltage); // in field calibration 
+  voltage += (4.2 - maxBatteryVoltage); // in field calibration
 
   if (voltage <= 3.62)
     return 75 * pow((voltage - 3.2), 2.);
@@ -349,7 +349,6 @@ uint8_t calcBatteryPercentage(float voltage) {
 
 void rainbowMode() {
   displayRainbow();
-  digitalWrite(DISPLAY_POWER, LOW);
   scd4x.stopPeriodicMeasurement();
   scd4x.powerDown();
   digitalWrite(LED_POWER, LOW); //LED ON
@@ -513,7 +512,7 @@ void loop() {
     scd4x.stopPeriodicMeasurement();
     delay(500);
     uint16_t frcCorrection;
-    scd4x.performForcedRecalibration((uint16_t)420, frcCorrection);    
+    scd4x.performForcedRecalibration((uint16_t)420, frcCorrection);
     //Serial.println("forced recalibration done");
     delay(400);
     scd4x.startPeriodicMeasurement();
@@ -555,7 +554,7 @@ void loop() {
     Serial.print(humidity);
     Serial.print('\t');
 #endif
-    displayWriteTestResults(readBatteryVoltage(), BatteryMode, sensorStatus, serial0, serial1, serial2);
+    displayWriteTestResults(readBatteryVoltage(), sensorStatus, serial0, serial1, serial2);
   } else {
     /* Print Battery % */
     if (BatteryMode) {
@@ -565,7 +564,7 @@ void loop() {
     }
   }
 
-  updateDisplay(comingFromDeepSleep);
+  updateDisplay();
 
   if (BatteryMode) {
     if (!comingFromDeepSleep) {
