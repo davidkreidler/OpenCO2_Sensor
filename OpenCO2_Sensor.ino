@@ -173,7 +173,7 @@ void initOnce() {
 
   if (TEST_MODE) {
     EEPROM.write(0, 0); //reset welcome
-    //EEPROM.write(1, 2); //write HWSubRev 2
+    EEPROM.write(1, 2); //write HWSubRev 2
     EEPROM.commit();
     preferences.begin("co2-sensor", true); 
     preferences.putFloat("MBV", 3.95); //default maxBatteryVoltage
@@ -221,7 +221,7 @@ void setLED(uint16_t co2) {
 
   int red = 0, green = 0, blue = 0;
 
-  if (co2 > 2000) {
+  /*if (co2 > 2000) {
     red = 216; green = 2; blue = 131; // magenta
   } else {
     red   =   pow((co2 - 400), 2) / 10000;
@@ -233,6 +233,20 @@ void setLED(uint16_t co2) {
   if (green > 255) green = 255;
   if (blue < 0) blue = 0;
   if (blue > 255) blue = 255;
+  */
+  if (co2 < 600) {
+    green = 255;
+  } else if(co2 < 800) {
+    red = 60; green = 200;
+  } else if(co2 < 1000) {
+    red = 140; green = 120;
+  } else if(co2 < 1500) {
+    red = 200; green = 60;
+  } else if(co2 < 2000) {
+    red = 255;
+  } else {
+    red = 216; green = 2; blue = 131; // magenta
+  }
 
   red =   (int)(red   * (ledbrightness / 100.0));
   green = (int)(green * (ledbrightness / 100.0));
@@ -347,6 +361,18 @@ uint8_t calcBatteryPercentage(float voltage) {
     return 100;
 }
 
+void factoryCalibration() {
+  /* Only run this, if calibration is needed!
+   let the Sensor run outside for 3+ minutes before.
+ */
+  scd4x.stopPeriodicMeasurement();
+  delay(500);
+  uint16_t frcCorrection;
+  scd4x.performForcedRecalibration((uint16_t)420, frcCorrection);
+  delay(400);
+  displayWelcome();
+}
+
 void rainbowMode() {
   displayRainbow();
   scd4x.stopPeriodicMeasurement();
@@ -402,7 +428,7 @@ void setup() {
     pinMode(GPIO_NUM_0, INPUT_PULLUP);
     int secPressed = 0;
     while (digitalRead(GPIO_NUM_0) == 0) {
-      if (secPressed == 4) rainbowMode();
+      if (secPressed == 4) factoryCalibration(); //rainbowMode();
       secPressed++;
       delay(1000);
     }
