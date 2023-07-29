@@ -19,6 +19,9 @@
 
 RTC_DATA_ATTR int refreshes = 1;
 RTC_DATA_ATTR UBYTE *BlackImage;
+extern bool BatteryMode;
+extern bool comingFromDeepSleep;
+extern int HWSubRev;
 
 sFONT big=bahn_big; //gotham_big nothing_big bahn_big
 sFONT mid=bahn_mid; //gotham_mid nothing_mid bahn_mid
@@ -194,6 +197,63 @@ void displayWriteMeasuerments(uint16_t co2, float temperature, float humidity) {
     Paint_DrawNum(240, 220, humidity, &big, BLACK, WHITE);
     Paint_DrawString_EN(340, 220, "%", &sml, WHITE, BLACK);
 #endif
+}
+
+#include "qrcode.h"
+#define ESP_QRCODE_CONFIG() (esp_qrcode_config_t) { \
+    .display_func = draw_qr_code, \
+    .max_qrcode_version = 26, \
+    .qrcode_ecc_level = ESP_QRCODE_ECC_LOW, \
+}
+
+void draw_qr_code(const uint8_t * qrcode) {
+  int qrcodeSize = esp_qrcode_get_size(qrcode);
+  int scaleFactor = 1;
+
+  if (qrcodeSize < 24)      scaleFactor = 7;
+  else if (qrcodeSize < 28) scaleFactor = 6;
+  else if (qrcodeSize < 34) scaleFactor = 5;
+  else if (qrcodeSize < 42) scaleFactor = 4;
+  else if (qrcodeSize < 56) scaleFactor = 3;
+  else if (qrcodeSize < 84) scaleFactor = 2;
+  
+  int Start = (200 - (qrcodeSize *scaleFactor)) / 2;
+  Paint_Clear(WHITE);
+  for (int y=0; y < qrcodeSize; y++) {
+    for (int x=0; x < qrcodeSize; x++) {
+      if (esp_qrcode_get_module(qrcode, x, y)) {
+        if (scaleFactor > 1) Paint_DrawRectangle(Start + x * scaleFactor,
+                                                 Start + y * scaleFactor,
+                                                 Start + x * scaleFactor + scaleFactor, 
+                                                 Start + y * scaleFactor + scaleFactor,
+                                                 BLACK, DOT_PIXEL_1X1, DRAW_FILL_FULL);
+        else Paint_SetPixel(x + (200-qrcodeSize)/2, y + (200-qrcodeSize)/2, BLACK);
+      }
+    }
+  }
+
+  if (qrcodeNumber+1 >= 10) Paint_DrawNum(200-5*11, 200-16, qrcodeNumber+1, &Font16, BLACK, WHITE);
+  else Paint_DrawNum(200-4*11, 200-16, qrcodeNumber+1, &Font16, BLACK, WHITE);
+  Paint_DrawString_EN(200-3*11, 200-16, "/", &Font16, WHITE, BLACK);
+  Paint_DrawNum(200-2*11, 200-16, hour+1, &Font16, BLACK, WHITE);
+  updateDisplay();
+}
+
+void displayQRcode(uint16_t measurements[24][120]) {
+  char buffer[5*120+1];
+  int numEnties = halfminute;
+  if (hour > qrcodeNumber) numEnties = 120; // display all values included in previous hours
+
+  for (int i=0; i<numEnties; i++) {
+    char tempStr[6];
+    snprintf(tempStr, sizeof(tempStr), "%d", measurements[qrcodeNumber][i]);
+
+    if (i == 0) snprintf(buffer, sizeof(buffer), "%s", tempStr);
+    else snprintf(buffer + strlen(buffer), sizeof(buffer) - strlen(buffer), " %s", tempStr);
+  }
+
+  esp_qrcode_config_t cfg = ESP_QRCODE_CONFIG();
+  esp_qrcode_generate(&cfg, buffer);
 }
 
 void displayWriteError(char errorMessage[256]){

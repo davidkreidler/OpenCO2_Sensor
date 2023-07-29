@@ -14,5 +14,6 @@ void displayWriteTestResults(float voltage, uint16_t sensorStatus, uint16_t seri
 void displayBattery(uint8_t percentage);
 void updateDisplay();
 void displayRainbow();
+void displayQRcode(uint16_t measurements[24][120]);
 
 #endif /* EPD_ABSTRACTION_H */

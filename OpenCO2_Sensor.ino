@@ -65,11 +65,11 @@ Adafruit_DotStar strip(1, 40, 39, DOTSTAR_BRG); // numLEDs, DATAPIN, CLOCKPIN
 SensirionI2CScd4x scd4x;
 
 RTC_DATA_ATTR bool initDone = false;
-RTC_DATA_ATTR extern bool BatteryMode = false;
-RTC_DATA_ATTR extern bool comingFromDeepSleep = false;
+RTC_DATA_ATTR bool BatteryMode = false;
+RTC_DATA_ATTR bool comingFromDeepSleep = false;
 RTC_DATA_ATTR int ledbrightness = 5;
 RTC_DATA_ATTR bool LEDalwaysOn = false;
-RTC_DATA_ATTR extern int HWSubRev = 1; //default only
+RTC_DATA_ATTR int HWSubRev = 1; //default only
 RTC_DATA_ATTR float maxBatteryVoltage;
 
 /* TEST_MODE */
@@ -374,6 +374,52 @@ void rainbowMode() {
   }
 }
 
+RTC_DATA_ATTR uint8_t hour = 0;
+RTC_DATA_ATTR uint8_t halfminute = 0;
+RTC_DATA_ATTR uint16_t measurements[24][120];
+void saveMeasurement(uint16_t co2){
+  if (halfminute == 120) {
+    halfminute=0;
+    hour++;
+  }
+  if (hour == 24) {
+    for (int i=0; i<23; ++i) memcpy(measurements[i], measurements[i + 1], sizeof(uint16_t) * 120);
+    hour = 23;
+  }
+
+  measurements[hour][halfminute] = co2;
+  halfminute++;
+}
+
+int qrcodeNumber = 0;
+void fiveSecPressed() {
+  //rainbowMode();
+
+  //DEMO DATA:
+  /*hour = 2;
+  for (int i=0; i<120; i++) {
+    measurements[0][i] = 400+i;
+    measurements[1][i] = 520+i;
+    measurements[2][i] = 1000+i;
+  }
+  halfminute = 120;*/
+
+  qrcodeNumber = hour; // start at current hour
+  extern int refreshes;
+  refreshes = 1; // force full update
+  for (int i=0; i<200; i++) {
+    if (digitalRead(GPIO_NUM_0) == 0) {  //goto next qr code
+      displayQRcode(measurements);
+      goto_light_sleep(500);
+      if (qrcodeNumber == hour) qrcodeNumber = 0;
+      else qrcodeNumber++;
+      i = 0; //display qrcode again for 20 sec
+    }
+    delay(100);
+  }
+  refreshes = 1; // force full update
+}
+
 void setup() {
   pinMode(DISPLAY_POWER, OUTPUT);
   pinMode(LED_POWER, OUTPUT);
@@ -402,7 +448,10 @@ void setup() {
     pinMode(GPIO_NUM_0, INPUT_PULLUP);
     int secPressed = 0;
     while (digitalRead(GPIO_NUM_0) == 0) {
-      if (secPressed == 4) rainbowMode();
+      if (secPressed == 4) {
+        fiveSecPressed();
+        return;
+      }
       secPressed++;
       delay(1000);
     }
@@ -489,6 +538,7 @@ void loop() {
     errorToString(error, errorMessage, 256);
     displayWriteError(errorMessage);
   } else {
+    if (BatteryMode) saveMeasurement(new_co2);
     /* dont update in Battery mode, unless CO2 has changed by 3% or temperature by 0.5°C */
     if (!TEST_MODE && BatteryMode && comingFromDeepSleep) {
       if ((abs(new_co2 - co2) < (0.03*co2)) && (fabs(new_temperature - temperature) < 0.5)) {
@@ -572,7 +622,7 @@ void loop() {
       scd4x.setTemperatureOffset(0.8);
       scd4x.startLowPowerPeriodicMeasurement();
     }
-    goto_deep_sleep(29000);
+    goto_deep_sleep(29500);
   }
 
   goto_light_sleep(4000);
