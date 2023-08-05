@@ -209,6 +209,7 @@ void displayWriteMeasuerments(uint16_t co2, float temperature, float humidity) {
 void draw_qr_code(const uint8_t * qrcode) {
   int qrcodeSize = esp_qrcode_get_size(qrcode);
   int scaleFactor = 1;
+  extern uint8_t qrcodeNumber, hour;
 
   if (qrcodeSize < 24)      scaleFactor = 7;
   else if (qrcodeSize < 28) scaleFactor = 6;
@@ -240,6 +241,7 @@ void draw_qr_code(const uint8_t * qrcode) {
 }
 
 void displayQRcode(uint16_t measurements[24][120]) {
+  extern uint8_t halfminute, hour, qrcodeNumber;
   char buffer[5*120+1];
   int numEnties = halfminute;
   if (hour > qrcodeNumber) numEnties = 120; // display all values included in previous hours
@@ -254,6 +256,44 @@ void displayQRcode(uint16_t measurements[24][120]) {
 
   esp_qrcode_config_t cfg = ESP_QRCODE_CONFIG();
   esp_qrcode_generate(&cfg, buffer);
+}
+
+void displayMenu(uint8_t selectedOption) {
+  extern const char* menuItems[NUM_OPTIONS];
+  Paint_Clear(WHITE);
+  Paint_DrawString_EN(66, 1, "Menu", &Font24, WHITE, BLACK);
+  Paint_DrawLine(10, 25, 190, 25, BLACK, DOT_PIXEL_1X1, LINE_STYLE_SOLID);
+
+  for (int i=0; i<NUM_OPTIONS; i++) {
+    if (i == selectedOption) {
+      Paint_DrawRectangle(0, 29*(i+1), 200, (i+2)*29, BLACK, DOT_PIXEL_1X1, DRAW_FILL_FULL);
+      Paint_DrawString_EN(5, 29*(i+1)+2, menuItems[i], &Font24, BLACK, WHITE);
+    } else {
+      Paint_DrawString_EN(5, 29*(i+1)+2, menuItems[i], &Font24, WHITE, BLACK);
+    }
+  }
+
+  updateDisplay();
+}
+
+void displayCalibrationWarning() {
+  Paint_Clear(BLACK);
+
+  // Exclamation Mark !
+  Paint_DrawLine( 100,  50, 100,  85, WHITE, DOT_PIXEL_4X4, LINE_STYLE_SOLID);
+  Paint_DrawCircle(100, 105,   5, WHITE, DOT_PIXEL_1X1, DRAW_FILL_FULL);
+
+                // Xstart,Ystart,Xend,Yend
+  Paint_DrawLine( 100,  20,  35, 120, WHITE, DOT_PIXEL_3X3, LINE_STYLE_SOLID);
+  Paint_DrawLine( 100,  20, 165, 120, WHITE, DOT_PIXEL_3X3, LINE_STYLE_SOLID);
+  Paint_DrawLine(  37, 120, 163, 120, WHITE, DOT_PIXEL_4X4, LINE_STYLE_SOLID);
+  
+  Paint_DrawString_EN(16, 132, "Calibration!", &Font20, BLACK, WHITE);
+  Paint_DrawString_EN(1, 152, "Put Sensor outside", &Font16, BLACK, WHITE);
+  Paint_DrawString_EN(1, 168, "for 3+ minutes. Or", &Font16, BLACK, WHITE);
+  Paint_DrawString_EN(1, 184, "hold knob to stop", &Font16, BLACK, WHITE);
+
+  updateDisplay();
 }
 
 void displayWriteError(char errorMessage[256]){
