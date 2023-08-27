@@ -20,6 +20,7 @@ jobs:
             - name: Adafruit DotStar
             - name: Sensirion Core
             - name: Sensirion I2C SCD4x
+            - name: WiFiManager
             - name: esp32-waveshare-epd
               source-path: ./esp32-waveshare-epd
           sketch-paths: |

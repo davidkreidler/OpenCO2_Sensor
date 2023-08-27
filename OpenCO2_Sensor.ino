@@ -23,8 +23,6 @@
 Preferences preferences;
 
 /* WIFI */
-//#define WIFI
-#ifdef WIFI
 #include <WiFi.h>
 #include <WiFiManager.h>
 WiFiManager wifiManager;
@@ -51,7 +49,6 @@ WiFiManagerParameter custom_mqtt_server("server", "mqtt server", mqtt_server, 40
 WiFiManagerParameter custom_mqtt_port("port", "mqtt port", mqtt_port, 6);
 WiFiManagerParameter custom_api_token("apikey", "API token", api_token, 32);
 #endif /* MQTT */
-#endif /* WIFI */
 
 /* led */
 #include <Adafruit_DotStar.h>
@@ -72,6 +69,7 @@ RTC_DATA_ATTR int ledbrightness = 5;
 RTC_DATA_ATTR bool LEDalwaysOn = false;
 RTC_DATA_ATTR int HWSubRev = 1; //default only
 RTC_DATA_ATTR float maxBatteryVoltage;
+RTC_DATA_ATTR bool useWiFi;
 
 /* TEST_MODE */
 RTC_DATA_ATTR bool TEST_MODE = false;
@@ -84,8 +82,7 @@ RTC_DATA_ATTR uint16_t co2 = 400;
 RTC_DATA_ATTR float temperature = 0.0f;
 RTC_DATA_ATTR float humidity = 0.0f;
 
-#ifdef WIFI
-#define tempOffset 13.0
+/* WIFI */
 bool shouldSaveConfig = false;
 void saveConfigCallback() {
   shouldSaveConfig = true;
@@ -161,9 +158,11 @@ void loadCredentials() {
   strcpy(api_token, s_api_token.c_str());
 }
 #endif /* MQTT */
-#else
-#define tempOffset 4.4 // was 5.8
-#endif /* WIFI */
+
+float getTempOffset() {
+  if (useWiFi) return 13.0;
+  else return 4.4;
+}
 
 void initOnce() {
   initEpdOnce();
@@ -197,12 +196,13 @@ void initOnce() {
   HWSubRev = EEPROM.read(1);
   preferences.begin("co2-sensor", true);
   maxBatteryVoltage = preferences.getFloat("MBV", 3.95);
+  useWiFi = preferences.getBool("WiFi", false);
   preferences.end();
 
   scd4x.stopPeriodicMeasurement(); // stop potentially previously started measurement
   scd4x.setSensorAltitude(50);     // Berlin: 50m über NN
   scd4x.setAutomaticSelfCalibration(1);
-  scd4x.setTemperatureOffset(tempOffset);
+  scd4x.setTemperatureOffset(getTempOffset());
   scd4x.startPeriodicMeasurement();
 
   displayInit();
@@ -264,11 +264,12 @@ void lowBatteryMode() {
 }
 
 void goto_deep_sleep(int ms) {
-#ifdef WIFI
-  esp_wifi_disconnect();
-  esp_wifi_stop();
-  delay(1);
-#endif
+  if (useWiFi) {
+    WiFi.disconnect();
+    WiFi.mode(WIFI_OFF);
+    esp_wifi_stop();
+    delay(1);
+  }
 
   esp_sleep_enable_timer_wakeup(ms * 1000);                             // periodic measurement every 30 sec - 0.83 sec awake
   esp_sleep_pd_config(ESP_PD_DOMAIN_RTC_PERIPH, ESP_PD_OPTION_AUTO);    // RTC IO, sensors and ULP co-processor
@@ -304,27 +305,27 @@ void goto_light_sleep(int ms) {
     return;
   }
 
-#ifdef WIFI
-  for (int i=0; i<(ms/100); i++) {
-    if (digitalRead(BUTTON) == 0) {
-      handleButtonPress();
-      return;
+  if (useWiFi) {
+    for (int i=0; i<(ms/100); i++) {
+      if (digitalRead(BUTTON) == 0) {
+        handleButtonPress();
+        return;
+      }
+      delay(100);
     }
-    delay(100);
-  }
-#else
-  gpio_wakeup_enable(BUTTON, GPIO_INTR_LOW_LEVEL);
-  esp_sleep_enable_gpio_wakeup();
+  } else {
+    gpio_wakeup_enable(BUTTON, GPIO_INTR_LOW_LEVEL);
+    esp_sleep_enable_gpio_wakeup();
 
-  esp_sleep_enable_timer_wakeup(ms * 1000);                             // periodic measurement every 5 sec -1.1 sec awake
-  esp_sleep_pd_config(ESP_PD_DOMAIN_RTC_PERIPH, ESP_PD_OPTION_AUTO);    // RTC IO, sensors and ULP co-processor
-  esp_sleep_pd_config(ESP_PD_DOMAIN_RTC_SLOW_MEM, ESP_PD_OPTION_AUTO);  // RTC slow memory: auto
-  esp_sleep_pd_config(ESP_PD_DOMAIN_RTC_FAST_MEM, ESP_PD_OPTION_OFF);   // RTC fast memory
-  esp_sleep_pd_config(ESP_PD_DOMAIN_XTAL, ESP_PD_OPTION_OFF);           // XTAL oscillator
-  esp_sleep_pd_config(ESP_PD_DOMAIN_RTC8M, ESP_PD_OPTION_OFF);          // CPU core
-  esp_sleep_pd_config(ESP_PD_DOMAIN_VDDSDIO, ESP_PD_OPTION_OFF);
-  esp_light_sleep_start();
-#endif
+    esp_sleep_enable_timer_wakeup(ms * 1000);                             // periodic measurement every 5 sec -1.1 sec awake
+    esp_sleep_pd_config(ESP_PD_DOMAIN_RTC_PERIPH, ESP_PD_OPTION_AUTO);    // RTC IO, sensors and ULP co-processor
+    esp_sleep_pd_config(ESP_PD_DOMAIN_RTC_SLOW_MEM, ESP_PD_OPTION_AUTO);  // RTC slow memory: auto
+    esp_sleep_pd_config(ESP_PD_DOMAIN_RTC_FAST_MEM, ESP_PD_OPTION_OFF);   // RTC fast memory
+    esp_sleep_pd_config(ESP_PD_DOMAIN_XTAL, ESP_PD_OPTION_OFF);           // XTAL oscillator
+    esp_sleep_pd_config(ESP_PD_DOMAIN_RTC8M, ESP_PD_OPTION_OFF);          // CPU core
+    esp_sleep_pd_config(ESP_PD_DOMAIN_VDDSDIO, ESP_PD_OPTION_OFF);
+    esp_light_sleep_start();
+  }
 }
 
 void updateBatteryMode() {
@@ -444,11 +445,40 @@ void history() {
   }
 }
 
+void toggleWiFi() {
+  useWiFi = !useWiFi;
+  preferences.begin("co2-sensor", false);
+  preferences.putBool("WiFi", useWiFi);
+  preferences.end();
+  displayWiFi(useWiFi);
+  
+  if(!BatteryMode) {
+    scd4x.stopPeriodicMeasurement();
+    scd4x.setTemperatureOffset(getTempOffset());
+    scd4x.startPeriodicMeasurement();
+    if (useWiFi) {
+      startWiFi();
+    } else {
+      WiFi.disconnect();
+      WiFi.mode(WIFI_OFF);
+      esp_wifi_stop();
+      goto_light_sleep(1); // clear ESP_SLEEP_WAKEUP_GPIO
+    }
+  }
+
+  delay(500);
+  for (int i=0; i<200; i++) {
+    if (digitalRead(BUTTON) == 0) return; // wait for button press
+    delay(100);
+  }
+}
+
 enum MenuOptions {
   LED,
   RAINBOW,
   CALIBRATE,
   HISTORY,
+  WLAN,
   EXIT,
   NUM_OPTIONS
 };
@@ -458,6 +488,7 @@ const char* menuItems[NUM_OPTIONS] = {
   "Rainbow",
   "Calibrate",
   "History",
+  "Wi-Fi",
   "Exit"
 };
 
@@ -468,7 +499,7 @@ void handleButtonPress() {
   displayMenu(selectedOption);
 
   uint16_t mspressed;
-  for (int i=0; i<20000; i++) { // display Menu up to 20 sec
+  for (int i=0; i<2000; i++) { // display Menu up to 20 sec
     mspressed = 0;
     if (digitalRead(BUTTON) == 0) {
       while(digitalRead(BUTTON) == 0) { // calculate how long BUTTON is pressed
@@ -495,6 +526,10 @@ void handleButtonPress() {
             history();
             refreshes = 1;
             return;
+          case WLAN:
+            toggleWiFi();
+            refreshes = 1;
+            return;   
           case EXIT:
             refreshes = 1;
             return;
@@ -506,8 +541,40 @@ void handleButtonPress() {
         i = 0; // display Menu again for 20 sec
       }
     }
-    delay(1);
+    delay(10);
   }
+}
+
+void startWiFi() {
+  wifiManager.setSaveConfigCallback([]() {
+#ifdef MQTT 
+   saveCredentials();
+#endif
+  });
+  
+  wifiManager.setSaveConfigCallback(saveConfigCallback);
+#ifdef MQTT
+  wifiManager.addParameter(&custom_mqtt_server);
+  wifiManager.addParameter(&custom_mqtt_port);
+  wifiManager.addParameter(&custom_api_token);
+#endif /* MQTT */
+  wifiManager.setConfigPortalBlocking(false);
+  wifiManager.autoConnect("OpenCO2 Sensor");
+
+#ifdef MQTT
+  loadCredentials();
+  if(mqtt_server[0] != '\0' && mqtt_port[0] != '\0'){
+      mqttClient.connect(mqtt_server, (int)mqtt_port);
+  }
+#endif /* MQTT */
+
+#ifdef airgradient
+  server.on("/", HandleRoot);
+  server.on("/metrics", HandleRoot);
+  server.onNotFound(HandleNotFound);
+  server.begin();
+  Serial.println("HTTP server started at ip " + WiFi.localIP().toString() + ":" + String(port));
+#endif /* airgradient */
 }
 
 void setup() {
@@ -543,61 +610,21 @@ void setup() {
     setLED(co2);
 
     scd4x.stopPeriodicMeasurement();   // stop low power measurement
-    scd4x.setTemperatureOffset(tempOffset);
+    scd4x.setTemperatureOffset(getTempOffset());
     scd4x.startPeriodicMeasurement();
     /* Wait for co2 measurement */
     delay(5000);
   }
 
-#ifdef WIFI
-  if (!BatteryMode) {
-    /*WiFi.mode(WIFI_STA);
-    WiFi.begin(ssid, password);
-    while (WiFi.status() != WL_CONNECTED) delay(500);
-    Serial.println(WiFi.localIP());*/
-
-    wifiManager.setSaveConfigCallback([]() {
-#ifdef MQTT 
-      saveCredentials();
-#endif
-    });
-  
-    wifiManager.setSaveConfigCallback(saveConfigCallback);
-#ifdef MQTT
-    wifiManager.addParameter(&custom_mqtt_server);
-    wifiManager.addParameter(&custom_mqtt_port);
-    wifiManager.addParameter(&custom_api_token);
-#endif /* MQTT */
-    wifiManager.setConfigPortalBlocking(false);
-    wifiManager.autoConnect("OpenCO2 Sensor");
-
-#ifdef MQTT
-    loadCredentials();
-    if(mqtt_server[0] != '\0' && mqtt_port[0] != '\0'){
-        mqttClient.connect(mqtt_server, (int)mqtt_port);
-    }
-#endif /* MQTT */
-
-#ifdef airgradient
-    server.on("/", HandleRoot);
-    server.on("/metrics", HandleRoot);
-    server.onNotFound(HandleNotFound);
-    server.begin();
-    Serial.println("HTTP server started at ip " + WiFi.localIP().toString() + ":" + String(port));
-#endif /* airgradient */
-
-  }
-#endif /* WIFI */
+  if (useWiFi && !BatteryMode) startWiFi();
 }
 
 
 void loop() {
-  if (esp_sleep_get_wakeup_cause() == ESP_SLEEP_WAKEUP_GPIO) handleButtonPress();
+  if (!useWiFi && esp_sleep_get_wakeup_cause() == ESP_SLEEP_WAKEUP_GPIO) handleButtonPress();
   updateBatteryMode(); // check again in USB Power mode
 
-#ifdef WIFI
-  if (!BatteryMode) wifiManager.process();
-#endif
+  if (useWiFi && !BatteryMode) wifiManager.process();
 
   bool isDataReady = false;
   uint16_t ready_error = scd4x.getDataReadyFlag(isDataReady);
@@ -630,31 +657,31 @@ void loop() {
     displayWriteMeasuerments(co2, temperature, humidity);
   }
 
-#ifdef WIFI
+  if (useWiFi) {
 #ifdef MQTT
-  if (!error && !BatteryMode) {
-    if (WiFi.status() == WL_CONNECTED) {
-      mqttClient.beginMessage("co2_ppm");
-      mqttClient.print(co2);
-      mqttClient.endMessage();
-      mqttClient.beginMessage("temperature");
-      mqttClient.print(temperature);
-      mqttClient.endMessage();
-      mqttClient.beginMessage("humidity");
-      mqttClient.print(humidity);
-      mqttClient.endMessage();
+    if (!error && !BatteryMode) {
+      if (WiFi.status() == WL_CONNECTED) {
+        mqttClient.beginMessage("co2_ppm");
+        mqttClient.print(co2);
+        mqttClient.endMessage();
+        mqttClient.beginMessage("temperature");
+        mqttClient.print(temperature);
+        mqttClient.endMessage();
+        mqttClient.beginMessage("humidity");
+        mqttClient.print(humidity);
+        mqttClient.endMessage();
+      }
     }
-  }
 #endif /* MQTT */
 
 #ifdef airgradient
-  if (!error && !BatteryMode) {
-    if (WiFi.status() == WL_CONNECTED) {
-      server.handleClient();
+    if (!error && !BatteryMode) {
+      if (WiFi.status() == WL_CONNECTED) {
+        server.handleClient();
+      }
     }
-  }
 #endif /* airgradient */
-#endif /* WIFI */
+  }
 
   if (TEST_MODE) {
 #if ARDUINO_USB_CDC_ON_BOOT && !ARDUINO_USB_MODE
@@ -672,6 +699,8 @@ void loop() {
       float voltage = readBatteryVoltage();
       if (voltage < 3.2) lowBatteryMode();
       displayBattery(calcBatteryPercentage(voltage));
+    } else if (useWiFi) {
+      displayWiFiStrengh();
     }
   }
 
