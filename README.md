@@ -4,52 +4,76 @@
 
 ![alt text](https://github.com/davidkreidler/OpenCO2_Sensor/raw/main/pictures/Header.png)
 
-OpenCO2 Sensor is an Arduino IDE compatible Repository for an E-Ink Indoor air quality CO2 Sensor using the ESP32-S2 and an RBG LED.
+OpenCO2 Sensor is an Arduino IDE compatible Repository for an E-Ink Indoor air quality Sensor using the ESP32, SCD4X and an RBG LED.
 
 ## Buy it [here on Tindie](https://www.tindie.com/products/davidkreidler/open-co2-sensor/)
 
-Especially in winter, when the windows are closed, a reminder to ventilate regularly is useful for health, 
-comfort and well-being. Poor indoor air quality can lead to decreased productivity and learning disabilities.
-Therefore, I developed an ESP32-S2 project that uses an E-Ink display to show the indoor CO2 content. 
-Comparable commercial meters cost significantly more and have fewer features.
+Especially in winter, when windows are closed, a reminder to ventilate regularly is useful for health, comfort and well-being. Poor indoor air quality can lead to decreased productivity and learning disabilities. Therefore, I developed an Open-source ESP32 project that uses an E-Ink display and a LED to show the indoor CO2 content. Take the small Sensor anywhere you go to monitor the Air Quality, with Battery life of 11+ days.
 
-# CO2 sensor
+# CO2 Sensor
+
 With the SCD40, Sensirion offers a completely new miniaturized CO2 sensor based on the photoacoustic sensor principle.
 The integrated, industry-leading humidity and temperature sensor offers high accuracy with low power consumption.
+* Automatic self-calibration ensures the highest long-term stability
+* CO2 output range: 400 ppm – 40'000 ppm
+* Accuracy:
+	* CO2 ±(50ppm + 5% of reading)
+	* Temperature ±0.8°C
+	* Humidity ±6%
 
 # Clear E-Ink display
-1.54" in size, with 200x200 pixel resolution and low power consumption with wide viewing angle. Per partial refresh, readings are updated every five seconds.
+
+1.54" in size with a very high resolution (200x200 Pixel). Enables low power consumption and wide viewing angle. Per partial refresh, readings are updated every five seconds (every 30 seconds in battery mode).
 
 # RGB LED
+
 For displaying the air quality as a traffic light (green, yellow, red, magenta). Brightness and color are adjustable via software.
 
 # 3D-printed housing
-size: 47 x 41 x 24 mm
-* [3D File BACK](https://raw.githubusercontent.com/davidkreidler/OpenCO2_Sensor/main/case/BACK.obj)
-* [3D File FRONT](https://raw.githubusercontent.com/davidkreidler/OpenCO2_Sensor/main/case/FRONT.obj)
 
-Use "Save as" to download the files.
+Size: 4.7 x 4.1 x 2.4 cm
+* [3D Model viewer](https://a360.co/3syuvEk)
+* [3D File FRONT](https://a360.co/3CSICGq)
+* [3D File BACK](https://a360.co/437Ak88)
 
 ![alt text](https://github.com/davidkreidler/OpenCO2_Sensor/raw/main/pictures/drawing.png)
 
-# Wi-Fi
-By means of the ESP32-S2 processor on a self-designed PCB, an APP connection via software update is planned.
-Thus, push notifications windows (open / close) and long-term measurements are possible.
+# Menu
 
-# Update to the latest release
+Press the Menu button on the backside of the OpenCO2 Sensor. Select an option via long press (1+ sec) or move to next menu point via a short press. Choose between:
+* `LED toggle` enable or disable the LED in battery mode
+* `Rainbow` fun little easter egg (press ↪️ to exit)
+* `Calibrate` put the sensor outside for 3+ minutes (only run this, if calibration is needed)
+* `History` display up to 24 QR codes containing 1h of measurements each (only stored in battery mode)
+* `Wi-Fi` enable or disable wireless connections
+* `Exit` quit Menu (automatically after 20 sec)
+
+# Wi-Fi
+
+Enable Wi-Fi via the Menu button. When power is connected, an access point `OpenCO2 Sensor` is enabled. Connect to it and navigate to http://192.168.4.1 (it will open automatically on modern Smartphones). Insert your home Wi-Fi credentials under `Configure WiFi`. Choose your network name from the list in the top and insert the password. Click `Save`. The sensor will now be automatically connected. Navigate to ip:9925 to see current co2/temperature/humidity measurements.
+![alt text](https://github.com/davidkreidler/OpenCO2_Sensor/raw/main/pictures/setup.jpg)
+
+# OTA Update
+
+Download `OpenCO2_Sensor.ino.bin` from the latest [release](https://github.com/davidkreidler/OpenCO2_Sensor/releases).
+Enable Wi-Fi via the Menu button, in an area where no previously known network is active. Connect power. Then connect to `OpenCO2 Sensor` and navigate to http://192.168.4.1 . Under `Update` select the `OpenCO2_Sensor.ino.bin` file and click `Update`. The Sensor will restart.
+![alt text](https://github.com/davidkreidler/OpenCO2_Sensor/raw/main/pictures/ota.jpg)
+
+# Update via USB
 
 1. Download all files from the latest [release](https://github.com/davidkreidler/OpenCO2_Sensor/releases)
 2. Make sure, that the power switch is in the `ON` position (down)
 3. Plug a data USB-C cable into your PC and the Sensor
 4. Hold the Button on the backside of the CO2 Sensor near the USB-C port and shortly push simultaneously the reset ↪️ Button
-5. Run `update.bat` or `update_wifi.bat` if you would like to use Wi-Fi.
-6. Afterwards push the reset ↪️ Button
+5. In Device Manager under `Ports (COM & LPT)` find the COM number and modify it in `update.bat`
+6. Run `update.bat`
+7. Afterwards push the reset ↪️ Button
 
 # Installation inside the Arduino IDE
 
 1. Copy the esp32-waveshare-epd Folder to your `Arduino/libraries/`
-2. [Install the ESP32-S2 support for Arduino IDE](https://espressif-docs.readthedocs-hosted.com/projects/arduino-esp32/en/latest/installing.html)
-3. Choose `ESP32S2 Dev Module` under `Tools -> Boards -> ESP32 Arduino`
+2. [Install the ESP32 support for Arduino IDE](https://espressif-docs.readthedocs-hosted.com/projects/arduino-esp32/en/latest/installing.html)
+3. Choose `ESP32S2 Dev Module` under `Tools -> Board -> esp32`
 4. Connect the Sensor as described in step "Update to the latest release" and choose the new Port under `Tools -> Boards -> Port`
 
 # Dependencies
@@ -57,34 +81,7 @@ Thus, push notifications windows (open / close) and long-term measurements are p
 * [Adafruit DotStar](https://github.com/adafruit/Adafruit_DotStar)
 * [Sensirion Core](https://github.com/Sensirion/arduino-core)
 * [Sensirion I2C SCD4x Arduino Library](https://github.com/Sensirion/arduino-i2c-scd4x)
-
-# German translation OpenCO2 Sensor
-
-Vor allem im Winter bei geschlossenen Fenstern ist eine Erinnerung, regelmäßig zu lüften, sinnvoll für die Gesundheit, 
-den Komfort und das Wohlbefinden. Schlechte Raumluftqualität kann zu verminderter Produktivität und Lernstörungen führen.
-Daher habe ich ein ESP32-S2 Hobby Projekt entwickelt, welches mittels eines E-Ink Displays den CO2 Gehalt der Luft anzeigt. 
-Vergleichbare kommerzielle Messgeräte kosten deutlich mehr und besitzen weniger Features.
-
-# CO2-Sensor
-Mit dem SCD40 bietet Sensirion einen völlig neuen miniaturisierten CO2-Sensor, welcher auf dem photoakustischen Sensorprinzip basiert.
-Der integrierte, branchenführende Feuchte- und Temperatursensor bietet eine hohe Genauigkeit bei einem geringen Energieverbrauch.
-
-# Klares E-Ink-Display
-1,54” groß, mit einer Auflösung von 200x200 Pixeln und niedrigem Stromverbrauch bei breitem Betrachtungswinkel. Per partiellem Refresh werden die Messwerte alle fünf Sekunden aktualisiert.
-
-# RGB-LED
-Zur Darstellung der Luftqualität als Ampel (grün / gelb / rot). Helligkeit und Farbe sind per Software einstellbar.
-
-# 3D-Gedrucktes Gehäuse
-Größe: 47 x 41 x 24 mm
-* [3D File BACK](https://raw.githubusercontent.com/davidkreidler/OpenCO2_Sensor/main/case/BACK.obj)
-* [3D File FRONT](https://raw.githubusercontent.com/davidkreidler/OpenCO2_Sensor/main/case/FRONT.obj)
-
-Benutze "Speichern unter" um die Dateien herunter zu laden.
-
-# WLAN
-Mittels des ESP32-S2 Prozessors auf einem selbst designten PCB ist eine APP Anbindung per Software Update geplant.
-Somit sind Push Benachrichtigungen Fenster (auf / zu) und Langzeitmessungen möglich.
+* [WiFiManager](https://github.com/tzapu/WiFiManager)
 
 ![alt text](https://github.com/davidkreidler/OpenCO2_Sensor/raw/main/pictures/animation.gif)
 
