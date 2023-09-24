@@ -379,8 +379,6 @@ void calibrate() {
 
 void rainbowMode() {
   displayRainbow();
-  scd4x.stopPeriodicMeasurement();
-  scd4x.powerDown();
   digitalWrite(LED_POWER, LOW); //LED ON
 
   for(int j = 0; j < 256; j++) {
@@ -400,6 +398,7 @@ void rainbowMode() {
     strip.setPixelColor(0, green, red, blue);
     strip.show();
     if (j == 255) j=0;
+    if (digitalRead(BUTTON) == 0) return;
     delay(20);
   }
 }
@@ -467,9 +466,9 @@ void toggleWiFi() {
   }
 
   delay(500);
-  for (int i=0; i<200; i++) {
-    if (digitalRead(BUTTON) == 0) return; // wait for button press
-    delay(100);
+  unsigned long StartTime = millis();
+  for (;;) { 
+    if ((millis() - StartTime) > 20000 || digitalRead(BUTTON) == 0) return; // wait for button press OR up to 20 sec
   }
 }
 
@@ -484,7 +483,7 @@ enum MenuOptions {
 };
 
 const char* menuItems[NUM_OPTIONS] = {
-  "LED toggle",
+  "LED on/off",
   "Rainbow",
   "Calibrate",
   "History",
@@ -499,7 +498,14 @@ void handleButtonPress() {
   displayMenu(selectedOption);
 
   uint16_t mspressed;
-  for (int i=0; i<2000; i++) { // display Menu up to 20 sec
+  unsigned long menuStartTime = millis();
+
+  for (;;) { 
+    if ((millis() - menuStartTime) > 20000) { // display Menu up to 20 sec
+      refreshes = 1;
+      return;
+    }
+
     mspressed = 0;
     if (digitalRead(BUTTON) == 0) {
       while(digitalRead(BUTTON) == 0) { // calculate how long BUTTON is pressed
@@ -507,16 +513,18 @@ void handleButtonPress() {
         mspressed += 100;
         if (mspressed > 1000) break;
       }
-      if (mspressed > 1000) {
+      if (mspressed > 1000) { // long press
         switch (selectedOption) {
           case LED:
             LEDalwaysOn = !LEDalwaysOn;
             setLED(co2);
-            delay(1000);
+            while(digitalRead(BUTTON) == 0) {} // wait until button is released
             refreshes = 1;
             return;
           case RAINBOW:
             rainbowMode();
+            setLED(co2);
+            refreshes = 1;
             return;
           case CALIBRATE:
             calibrate();
@@ -531,6 +539,7 @@ void handleButtonPress() {
             refreshes = 1;
             return;   
           case EXIT:
+            while(digitalRead(BUTTON) == 0) {} // wait until button is released
             refreshes = 1;
             return;
         }
@@ -538,10 +547,9 @@ void handleButtonPress() {
         if (selectedOption+1 == NUM_OPTIONS) selectedOption = 0;
         else selectedOption++;
         displayMenu(selectedOption);
-        i = 0; // display Menu again for 20 sec
+        menuStartTime = millis(); // display Menu again for 20 sec
       }
     }
-    delay(10);
   }
 }
 
@@ -629,6 +637,11 @@ void loop() {
   bool isDataReady = false;
   uint16_t ready_error = scd4x.getDataReadyFlag(isDataReady);
   if (ready_error || !isDataReady) {
+    // needed to overwrite displayed Menu 
+    displayWriteMeasuerments(co2, temperature, humidity);
+    if(BatteryMode) displayBattery(calcBatteryPercentage(readBatteryVoltage()));
+    updateDisplay();
+
     if (BatteryMode) goto_deep_sleep(29000);
     else goto_light_sleep(4000);
     return; // otherwise continues running!

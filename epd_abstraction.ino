@@ -237,6 +237,7 @@ void draw_qr_code(const uint8_t * qrcode) {
   else Paint_DrawNum(200-4*11, 200-16, qrcodeNumber+1, &Font16, BLACK, WHITE);
   Paint_DrawString_EN(200-3*11, 200-16, "/", &Font16, WHITE, BLACK);
   Paint_DrawNum(200-2*11, 200-16, hour+1, &Font16, BLACK, WHITE);
+  Paint_DrawString_EN(1, 1, "Wait 20sec to exit", &Font16, WHITE, BLACK);
   updateDisplay();
 }
 
@@ -402,6 +403,7 @@ void displayWiFiStrengh() {
 }
 
 void displayWriteError(char errorMessage[256]){
+  Paint_Clear(WHITE);
   Paint_DrawString_EN(5, 40, errorMessage, &Font20, WHITE, BLACK);
 }
 

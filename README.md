@@ -57,7 +57,7 @@ Enable Wi-Fi via the Menu button. When power is connected, an access point `Open
 
 Download `OpenCO2_Sensor.ino.bin` from the latest [release](https://github.com/davidkreidler/OpenCO2_Sensor/releases).
 Enable Wi-Fi via the Menu button, in an area where no previously known network is active. Connect power. Then connect to `OpenCO2 Sensor` and navigate to http://192.168.4.1 . Under `Update` select the `OpenCO2_Sensor.ino.bin` file and click `Update`. The Sensor will restart.
-![alt text](https://github.com/davidkreidler/OpenCO2_Sensor/raw/main/pictures/ota.jpg)
+![alt text](https://github.com/davidkreidler/OpenCO2_Sensor/raw/main/pictures/OTA.jpg)
 
 # Update via USB
 
