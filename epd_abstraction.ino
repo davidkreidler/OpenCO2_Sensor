@@ -78,6 +78,7 @@ void initEpdOnce() {
 void displayInitTestMode() {
 #ifdef EINK_1IN54V2
   Paint_DrawBitMap(gImage_init);
+  Paint_DrawString_EN(1, 1, VERSION, &Font16, WHITE, BLACK);
   Paint_DrawNum(125, 25, 1, &mid, BLACK, WHITE);
   EPD_1IN54_V2_Display(BlackImage);
 #endif
@@ -89,6 +90,7 @@ void displayInitTestMode() {
 void displayInit() {
 #ifdef EINK_1IN54V2
   Paint_DrawBitMap(gImage_init);
+  Paint_DrawString_EN(1, 1, VERSION, &Font16, WHITE, BLACK);
   EPD_1IN54_V2_Display(BlackImage);
   EPD_1IN54_V2_Sleep();
 #endif
@@ -106,8 +108,13 @@ void displayLowBattery() {
   Paint_DrawRectangle( 50,  40, 150, 90, WHITE, DOT_PIXEL_3X3, DRAW_FILL_EMPTY);
   Paint_DrawRectangle(150,  55, 160, 75, WHITE, DOT_PIXEL_1X1, DRAW_FILL_FULL);
   Paint_DrawLine(      60, 100, 140, 30, WHITE, DOT_PIXEL_3X3, LINE_STYLE_SOLID);
+#ifdef ENGLISH
+  Paint_DrawString_EN(45, 120, "Charge", &Font20, BLACK, WHITE);
+  Paint_DrawString_EN(45, 145, "Battery", &Font20, BLACK, WHITE);
+#else
   Paint_DrawString_EN(45, 120, "Batterie", &Font20, BLACK, WHITE);
   Paint_DrawString_EN(45, 145, "aufladen", &Font20, BLACK, WHITE);
+#endif
 
 #ifdef EINK_1IN54V2
   EPD_1IN54_V2_Init();
@@ -205,12 +212,13 @@ void displayWriteMeasuerments(uint16_t co2, float temperature, float humidity) {
     .max_qrcode_version = 26, \
     .qrcode_ecc_level = ESP_QRCODE_ECC_LOW, \
 }
-
+bool invertedQR;
 void draw_qr_code(const uint8_t * qrcode) {
   int qrcodeSize = esp_qrcode_get_size(qrcode);
   int scaleFactor = 1;
-  extern uint8_t qrcodeNumber, hour;
+  UWORD Color = invertedQR? WHITE : BLACK;
 
+  // min. 16px border: 200px - 2*16px = 168px usable
   if (qrcodeSize < 24)      scaleFactor = 7;
   else if (qrcodeSize < 28) scaleFactor = 6;
   else if (qrcodeSize < 34) scaleFactor = 5;
@@ -218,8 +226,8 @@ void draw_qr_code(const uint8_t * qrcode) {
   else if (qrcodeSize < 56) scaleFactor = 3;
   else if (qrcodeSize < 84) scaleFactor = 2;
   
-  int Start = (200 - (qrcodeSize *scaleFactor)) / 2;
-  Paint_Clear(WHITE);
+  int Start = (200 - (qrcodeSize * scaleFactor)) / 2;
+  Paint_Clear(invertedQR? BLACK : WHITE);
   for (int y=0; y < qrcodeSize; y++) {
     for (int x=0; x < qrcodeSize; x++) {
       if (esp_qrcode_get_module(qrcode, x, y)) {
@@ -227,21 +235,30 @@ void draw_qr_code(const uint8_t * qrcode) {
                                                  Start + y * scaleFactor,
                                                  Start + x * scaleFactor + scaleFactor, 
                                                  Start + y * scaleFactor + scaleFactor,
-                                                 BLACK, DOT_PIXEL_1X1, DRAW_FILL_FULL);
-        else Paint_SetPixel(x + (200-qrcodeSize)/2, y + (200-qrcodeSize)/2, BLACK);
+                                                 Color, DOT_PIXEL_1X1, DRAW_FILL_FULL);
+        else Paint_SetPixel(x + (200-qrcodeSize)/2, y + (200-qrcodeSize)/2, Color);
       }
     }
   }
+}
 
-  if (qrcodeNumber+1 >= 10) Paint_DrawNum(200-5*11, 200-16, qrcodeNumber+1, &Font16, BLACK, WHITE);
-  else Paint_DrawNum(200-4*11, 200-16, qrcodeNumber+1, &Font16, BLACK, WHITE);
-  Paint_DrawString_EN(200-3*11, 200-16, "/", &Font16, WHITE, BLACK);
-  Paint_DrawNum(200-2*11, 200-16, hour+1, &Font16, BLACK, WHITE);
-  Paint_DrawString_EN(1, 1, "Wait 20sec to exit", &Font16, WHITE, BLACK);
+void displayNoHistory() {
+  Paint_Clear(WHITE);
+#ifdef ENGLISH
+  Paint_DrawString_EN(15, 52, "Disconnect", &Font24, WHITE, BLACK);
+  Paint_DrawString_EN(15, 76, " power to ", &Font24, WHITE, BLACK);
+  Paint_DrawString_EN(15, 100, "  record  ", &Font24, WHITE, BLACK);
+  Paint_DrawString_EN(15+8, 124, " History ", &Font24, WHITE, BLACK);
+#else
+  Paint_DrawString_EN(58, 52, "Strom", &Font24, WHITE, BLACK);
+  Paint_DrawString_EN(15-8, 76, "trennen, um", &Font24, WHITE, BLACK);
+  Paint_DrawString_EN(15-8, 100, "Historie zu", &Font24, WHITE, BLACK);
+  Paint_DrawString_EN(15+8, 124, "speichern", &Font24, WHITE, BLACK);
+#endif
   updateDisplay();
 }
 
-void displayQRcode(uint16_t measurements[24][120]) {
+void displayHistory(uint16_t measurements[24][120]) {
   extern uint8_t halfminute, hour, qrcodeNumber;
   char buffer[5*120+1];
   int numEnties = halfminute;
@@ -255,25 +272,36 @@ void displayQRcode(uint16_t measurements[24][120]) {
     else snprintf(buffer + strlen(buffer), sizeof(buffer) - strlen(buffer), " %s", tempStr);
   }
 
+  invertedQR = false;
   esp_qrcode_config_t cfg = ESP_QRCODE_CONFIG();
   esp_qrcode_generate(&cfg, buffer);
+
+  if (qrcodeNumber+1 >= 10) Paint_DrawNum(200-5*11, 200-16, qrcodeNumber+1, &Font16, BLACK, WHITE);
+  else Paint_DrawNum(200-4*11, 200-16, qrcodeNumber+1, &Font16, BLACK, WHITE);
+  Paint_DrawString_EN(200-3*11, 200-16, "/", &Font16, WHITE, BLACK);
+  Paint_DrawNum(200-2*11, 200-16, hour+1, &Font16, BLACK, WHITE);
+#ifdef ENGLISH
+  Paint_DrawString_EN(1, 1, "Wait 20sec to exit", &Font16, WHITE, BLACK);
+#else
+  Paint_DrawString_EN(1, 1, "20 Sek. warten", &Font16, WHITE, BLACK);
+#endif
+  updateDisplay();
 }
 
 void displayMenu(uint8_t selectedOption) {
   extern const char* menuItems[NUM_OPTIONS];
   Paint_Clear(WHITE);
-  Paint_DrawString_EN(66, 1, "Menu", &Font24, WHITE, BLACK);
-  Paint_DrawLine(10, 25, 190, 25, BLACK, DOT_PIXEL_1X1, LINE_STYLE_SOLID);
+  Paint_DrawString_EN(66, 0, "Menu", &Font24, WHITE, BLACK);
+  Paint_DrawLine(10, 23, 190, 23, BLACK, DOT_PIXEL_1X1, LINE_STYLE_SOLID);
 
   for (int i=0; i<NUM_OPTIONS; i++) {
     if (i == selectedOption) {
-      Paint_DrawRectangle(0, 29*(i+1), 200, (i+2)*29, BLACK, DOT_PIXEL_1X1, DRAW_FILL_FULL);
-      Paint_DrawString_EN(5, 29*(i+1)+2, menuItems[i], &Font24, BLACK, WHITE);
+      Paint_DrawRectangle(0, 25*(i+1), 200, 25*(i+2), BLACK, DOT_PIXEL_1X1, DRAW_FILL_FULL);
+      Paint_DrawString_EN(5, 25*(i+1), menuItems[i], &Font24, BLACK, WHITE);
     } else {
-      Paint_DrawString_EN(5, 29*(i+1)+2, menuItems[i], &Font24, WHITE, BLACK);
+      Paint_DrawString_EN(5, 25*(i+1), menuItems[i], &Font24, WHITE, BLACK);
     }
   }
-
   updateDisplay();
 }
 
@@ -288,11 +316,18 @@ void displayCalibrationWarning() {
   Paint_DrawLine( 100,  20,  35, 120, WHITE, DOT_PIXEL_3X3, LINE_STYLE_SOLID);
   Paint_DrawLine( 100,  20, 165, 120, WHITE, DOT_PIXEL_3X3, LINE_STYLE_SOLID);
   Paint_DrawLine(  37, 120, 163, 120, WHITE, DOT_PIXEL_4X4, LINE_STYLE_SOLID);
-  
+
+#ifdef ENGLISH 
   Paint_DrawString_EN(16, 132, "Calibration!", &Font20, BLACK, WHITE);
   Paint_DrawString_EN(1, 152, "Put Sensor outside", &Font16, BLACK, WHITE);
   Paint_DrawString_EN(1, 168, "for 3+ minutes. Or", &Font16, BLACK, WHITE);
   Paint_DrawString_EN(1, 184, "hold knob to stop", &Font16, BLACK, WHITE);
+#else
+  Paint_DrawString_EN(16, 132, "Kalibration!", &Font20, BLACK, WHITE);
+  Paint_DrawString_EN(1, 152, "Sensor fur 3+ min.", &Font16, BLACK, WHITE);
+  Paint_DrawString_EN(1, 168, "nach drausen legen", &Font16, BLACK, WHITE);
+  Paint_DrawString_EN(1, 184, "Knopf = abbrechen", &Font16, BLACK, WHITE);
+#endif
 
   updateDisplay();
 }
@@ -300,31 +335,62 @@ void displayCalibrationWarning() {
 void displayWiFi(bool useWiFi) {
   Paint_Clear(BLACK);
 
-  Paint_DrawCircle(100, 100,  25, WHITE, DOT_PIXEL_4X4, DRAW_FILL_EMPTY);
-  Paint_DrawCircle(100, 100,  50, WHITE, DOT_PIXEL_4X4, DRAW_FILL_EMPTY);
-  Paint_DrawCircle(100, 100,  75, WHITE, DOT_PIXEL_4X4, DRAW_FILL_EMPTY);
-                // Xstart,Ystart,Xend,Yend
-  Paint_DrawLine(  0,   4, 100, 104, BLACK, DOT_PIXEL_8X8, LINE_STYLE_SOLID);
-  Paint_DrawLine(  0,  12, 100, 112, BLACK, DOT_PIXEL_8X8, LINE_STYLE_SOLID);
-  Paint_DrawRectangle(0, 50, 60, 100, BLACK, DOT_PIXEL_1X1, DRAW_FILL_FULL);
-  Paint_DrawLine(200,   4, 100, 104, BLACK, DOT_PIXEL_8X8, LINE_STYLE_SOLID);
-  Paint_DrawLine(200,  12, 100, 112, BLACK, DOT_PIXEL_8X8, LINE_STYLE_SOLID);
-  Paint_DrawRectangle(140, 50, 200, 200, BLACK, DOT_PIXEL_1X1, DRAW_FILL_FULL);
-  Paint_DrawRectangle(0, 100, 200, 200, BLACK, DOT_PIXEL_1X1, DRAW_FILL_FULL);
-  Paint_DrawCircle(100, 95,   4, WHITE, DOT_PIXEL_1X1, DRAW_FILL_FULL);
-
   if (useWiFi) {
-    Paint_DrawString_EN(23, 132, "Wi-Fi: ON", &Font20, BLACK, WHITE);
-    if(BatteryMode) Paint_DrawString_EN(1, 152, "  Connect Power", &Font16, BLACK, WHITE);
-    Paint_DrawString_EN(1, 168, " 'OpenCO2 Sensor'", &Font16, BLACK, WHITE);
-    Paint_DrawString_EN(1, 184, "http://192.168.4.1", &Font16, BLACK, WHITE);
-  } else {
-    Paint_DrawLine( 60, 90, 140, 10, WHITE, DOT_PIXEL_4X4, LINE_STYLE_SOLID);
-    Paint_DrawString_EN(23, 132, "Wi-Fi: OFF", &Font20, BLACK, WHITE);
-  }
+    if (BatteryMode) {
+#ifdef ENGLISH
+      Paint_DrawString_EN(23, 52, "Wi-Fi: ON", &Font24, BLACK, WHITE);
+      Paint_DrawString_EN(40, 76, "Connect", &Font24, BLACK, WHITE);
+      Paint_DrawString_EN(48, 100, "Power!", &Font24, BLACK, WHITE);
+#else
+      Paint_DrawString_EN(32, 52, "WLAN: AN", &Font24, BLACK, WHITE);
+      Paint_DrawString_EN(57, 76, "Strom", &Font24, BLACK, WHITE);
+      Paint_DrawString_EN(15, 100, "verbinden!", &Font24, BLACK, WHITE);
+#endif
+    } else {
+      invertedQR = true;
+      if (WiFi.status() == WL_CONNECTED) {
+        char buffer[40] = "http://";
+        String ip = WiFi.localIP().toString();
+        strcat(buffer, ip.c_str());
+        strcat(buffer, ":9925");
+        esp_qrcode_config_t cfg = ESP_QRCODE_CONFIG();
+        esp_qrcode_generate(&cfg, buffer);
 
+        Paint_DrawString_EN(1,   1, ip.c_str(), &Font16, BLACK, WHITE);
+        Paint_DrawString_EN(1, 184, ":9925", &Font16, BLACK, WHITE);
+      } else {
+        char const *buffer = "WIFI:T:;S:OpenCO2 Sensor;P:;;";
+        esp_qrcode_config_t cfg = ESP_QRCODE_CONFIG();
+        esp_qrcode_generate(&cfg, buffer);
+
+        Paint_DrawString_EN(1,   1, " 'OpenCO2 Sensor'", &Font16, BLACK, WHITE);
+        Paint_DrawString_EN(1, 184, "http://192.168.4.1", &Font16, BLACK, WHITE);
+      }
+    }
+  } else { /* No WiFi symbol */
+    Paint_DrawCircle(100, 100,  25, WHITE, DOT_PIXEL_4X4, DRAW_FILL_EMPTY);
+    Paint_DrawCircle(100, 100,  50, WHITE, DOT_PIXEL_4X4, DRAW_FILL_EMPTY);
+    Paint_DrawCircle(100, 100,  75, WHITE, DOT_PIXEL_4X4, DRAW_FILL_EMPTY);
+                  // Xstart,Ystart,Xend,Yend
+    Paint_DrawLine(  0,   4, 100, 104, BLACK, DOT_PIXEL_8X8, LINE_STYLE_SOLID);
+    Paint_DrawLine(  0,  12, 100, 112, BLACK, DOT_PIXEL_8X8, LINE_STYLE_SOLID);
+    Paint_DrawRectangle(0, 50, 60, 100, BLACK, DOT_PIXEL_1X1, DRAW_FILL_FULL);
+    Paint_DrawLine(200,   4, 100, 104, BLACK, DOT_PIXEL_8X8, LINE_STYLE_SOLID);
+    Paint_DrawLine(200,  12, 100, 112, BLACK, DOT_PIXEL_8X8, LINE_STYLE_SOLID);
+    Paint_DrawRectangle(140, 50, 200, 200, BLACK, DOT_PIXEL_1X1, DRAW_FILL_FULL);
+    Paint_DrawRectangle(0, 100, 200, 200, BLACK, DOT_PIXEL_1X1, DRAW_FILL_FULL);
+    Paint_DrawCircle(100, 95,   4, WHITE, DOT_PIXEL_1X1, DRAW_FILL_FULL);
+
+    Paint_DrawLine( 60, 90, 140, 10, WHITE, DOT_PIXEL_4X4, LINE_STYLE_SOLID);
+#ifdef ENGLISH
+    Paint_DrawString_EN(15, 132, "Wi-Fi: OFF", &Font24, BLACK, WHITE);
+#else
+    Paint_DrawString_EN(15, 132, "WLAN: AUS", &Font24, BLACK, WHITE);
+#endif
+  }
   updateDisplay();
 }
+
 void displayWiFiStrengh() {
   if (WiFi.status() != WL_CONNECTED) {
     const unsigned char wifiAP[] = {
@@ -345,11 +411,6 @@ void displayWiFiStrengh() {
     Paint_DrawImage(wifiAP, 150, 150, 40, 40);
     return;
   }
-
-  int32_t signalStrength = WiFi.RSSI();
-  /*char signalStrengthText[10];
-  snprintf(signalStrengthText, sizeof(signalStrengthText), "%d", signalStrength);
-  Paint_DrawString_EN(50, 150, signalStrengthText, &Font24, WHITE, BLACK);*/
 
   const unsigned char wifiFullIcon[] = {
     0XFF,0XFF,0XFF,0XFF,0XFF,0XFF,0X9F,0XFF,0XFF,0XFF,0XFF,0X87,0XFF,0XFF,0XFF,0XFF,
@@ -397,9 +458,85 @@ void displayWiFiStrengh() {
     0XFF,0XFF,0XFF,0XFF,0XFF,0XFF,0XFF,0XFF
   };
   
-  if        (signalStrength > -55) { Paint_DrawImage(wifiFullIcon,   150, 150, 40, 40); 
-  } else if (signalStrength > -70) { Paint_DrawImage(wifiMediumIcon, 150, 150, 40, 40);
-  } else {                           Paint_DrawImage(wifiLowIcon,    150, 150, 40, 40); }
+  int32_t signalStrength = WiFi.RSSI();
+                                                                 //xStart,yStart,W_Image,H_Image 
+  if        (signalStrength > -55) { Paint_DrawImage(wifiFullIcon,   142, 101, 40, 40); 
+  } else if (signalStrength > -70) { Paint_DrawImage(wifiMediumIcon, 142, 101, 40, 40);
+  } else {                           Paint_DrawImage(wifiLowIcon,    142, 101, 40, 40); }
+
+  /* time */
+  struct tm timeinfo;
+  getLocalTime(&timeinfo);  
+  //char time[100];
+  //sprintf(time, "%d-%02d-%02d %02d:%02d:%02d", (timeinfo.tm_year)+1900, timeinfo.tm_mday, (timeinfo.tm_mon)+1, timeinfo.tm_hour, timeinfo.tm_min, timeinfo.tm_sec);
+  char hour[3];
+  char minute[3];
+  sprintf(hour, "%02d", timeinfo.tm_hour);
+  sprintf(minute, "%02d", timeinfo.tm_min);
+  Paint_DrawString_EN(1, 150, hour, &sml, WHITE, BLACK);
+                // XCenter,YCenter,radius
+  Paint_DrawCircle(1+13*2+3, 150+10, 2, BLACK, DOT_PIXEL_1X1, DRAW_FILL_FULL);
+  Paint_DrawCircle(1+13*2+3, 150+20, 2, BLACK, DOT_PIXEL_1X1, DRAW_FILL_FULL);
+  Paint_DrawString_EN(1+13*2+6, 150, minute, &sml, WHITE, BLACK);
+}
+
+void displayinfo() {
+  extern uint16_t serial0, serial1, serial2;
+  Paint_Clear(WHITE);
+
+  Paint_DrawString_EN(0, 1, "MAC Address:", &Font16, WHITE, BLACK);
+  Paint_DrawString_EN(0, 17, WiFi.macAddress().c_str(), &Font16, WHITE, BLACK);
+
+  char serial[19] = "SCD4x:";
+  char hex[5];
+  sprintf(hex, "%04X", serial0);
+  strcat(serial, hex);
+  sprintf(hex, "%04X", serial1);
+  strcat(serial, hex);
+  sprintf(hex, "%04X", serial2);
+  strcat(serial, hex);
+  Paint_DrawString_EN(0, 33, serial, &Font16, WHITE, BLACK);
+
+  char average_temp[40];
+  sprintf(average_temp, "%.1f", sumTemp/10);
+  strcat(average_temp, "*C");
+  Paint_DrawString_EN(1, 49, "ESP32:", &Font16, WHITE, BLACK);
+  Paint_DrawString_EN(67, 49, average_temp, &Font16, WHITE, BLACK);
+
+  int uptime_m = esp_timer_get_time() / 1000000 / 60;
+  int uptime_h = uptime_m / 60;
+  int uptime_d = uptime_h / 24;
+  uptime_h %= 24;
+  uptime_m %= 60;
+  char uptime[40];
+  sprintf(uptime, "%dD %d:%02d", uptime_d, uptime_h , uptime_m);
+  Paint_DrawString_EN(1, 65, "Up-time:", &Font16, WHITE, BLACK);
+  Paint_DrawString_EN(89, 65, uptime, &Font16, WHITE, BLACK);
+
+  Paint_DrawString_EN(1, 81, "Version:", &Font16, WHITE, BLACK);
+  Paint_DrawString_EN(89, 81, VERSION, &Font16, WHITE, BLACK);
+
+  Paint_DrawString_EN(1, 97, "Battery Voltage:", &Font16, WHITE, BLACK);
+  char batteryvolt[12];
+  sprintf(batteryvolt, "%.2f", readBatteryVoltage());
+  strcat(batteryvolt, "V max: ");
+  Paint_DrawString_EN(1, 113, batteryvolt, &Font16, WHITE, BLACK);
+  sprintf(batteryvolt, "%.2f", maxBatteryVoltage);
+  strcat(batteryvolt, "V");
+  Paint_DrawString_EN(122, 113, batteryvolt, &Font16, WHITE, BLACK);
+
+  if (WiFi.status() == WL_CONNECTED) {
+    char signalStrength[19] = "SNR:";
+    char buffer[5];
+    sprintf(buffer, "%d", WiFi.RSSI());
+    strcat(signalStrength, buffer);
+    strcat(signalStrength, "dBm");
+    Paint_DrawString_EN(1, 168, signalStrength, &Font16, WHITE, BLACK);
+
+    String ip = "IP:" + WiFi.localIP().toString();
+    Paint_DrawString_EN(1, 184, ip.c_str(), &Font16, WHITE, BLACK); //3*4+3=15  * 11px=
+  }
+  updateDisplay();
 }
 
 void displayWriteError(char errorMessage[256]){
@@ -408,7 +545,8 @@ void displayWriteError(char errorMessage[256]){
 }
 
 /* TEST_MODE */
-void displayWriteTestResults(float voltage, uint16_t sensorStatus, uint16_t serial0, uint16_t serial1, uint16_t serial2) {
+void displayWriteTestResults(float voltage, uint16_t sensorStatus) {
+  extern uint16_t serial0, serial1, serial2;
   char batteryvolt[8] = "";
   dtostrf(voltage, 1, 3, batteryvolt);
   char volt[10] = "V";
@@ -443,15 +581,15 @@ void displayWriteTestResults(float voltage, uint16_t sensorStatus, uint16_t seri
   Serial.print('\t');
   Paint_DrawString_EN(0, 176, mac, &Font12, WHITE, BLACK);
 
-  char serial[20]= "Serial:";
+  char serial[20] = "Serial:";
   char hex[5];
-  sprintf(hex, "%4X", serial0);
+  sprintf(hex, "%04X", serial0);
   Serial.print(hex);
   strcat(serial, hex);
-  sprintf(hex, "%4X", serial1);
+  sprintf(hex, "%04X", serial1);
   Serial.print(hex);
   strcat(serial, hex);
-  sprintf(hex, "%4X", serial2);
+  sprintf(hex, "%04X", serial2);
   Serial.println(hex);
   strcat(serial, hex);
   //Serial.print('\n');

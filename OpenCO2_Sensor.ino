@@ -7,6 +7,7 @@
    - Sensirion I2C SCD4x: https://github.com/Sensirion/arduino-i2c-scd4x
    - WiFiManager: https://github.com/tzapu/WiFiManager
 */
+#define VERSION "v4.2"
 
 /* Includes display */
 #include "DEV_Config.h"
@@ -189,7 +190,6 @@ void initOnce() {
     scd4x.stopPeriodicMeasurement();
     //scd4x.performFactoryReset();
     //delay(100);
-    scd4x.getSerialNumber(serial0, serial1, serial2);
     scd4x.performSelfTest(sensorStatus);
   }
 
@@ -200,6 +200,7 @@ void initOnce() {
   preferences.end();
 
   scd4x.stopPeriodicMeasurement(); // stop potentially previously started measurement
+  scd4x.getSerialNumber(serial0, serial1, serial2);
   scd4x.setSensorAltitude(50);     // Berlin: 50m über NN
   scd4x.setAutomaticSelfCalibration(1);
   scd4x.setTemperatureOffset(getTempOffset());
@@ -300,12 +301,7 @@ void goto_deep_sleep(int ms) {
 void goto_light_sleep(int ms) {
   comingFromDeepSleep = false;
 
-  if (TEST_MODE) {
-    delay(ms);
-    return;
-  }
-
-  if (useWiFi) {
+  if (useWiFi || TEST_MODE) {
     for (int i=0; i<(ms/100); i++) {
       if (digitalRead(BUTTON) == 0) {
         handleButtonPress();
@@ -431,10 +427,16 @@ void history() {
   }
   halfminute = 120;*/
 
+  if (halfminute == 0 && hour == 0) { // no history data
+    displayNoHistory();
+    unsigned long StartTime = millis();
+    for (;;) if ((millis() - StartTime) > 20000 || digitalRead(BUTTON) == 0) return; // wait for button press OR up to 20 sec
+  }
+
   qrcodeNumber = hour; // start at current hour
   for (int i=0; i<200; i++) {
     if (digitalRead(BUTTON) == 0) {  // goto next qr code
-      displayQRcode(measurements);
+      displayHistory(measurements);
       delay(500);
       if (qrcodeNumber == hour) qrcodeNumber = 0;
       else qrcodeNumber++;
@@ -444,31 +446,41 @@ void history() {
   }
 }
 
+void handleWiFiChange() {
+  scd4x.stopPeriodicMeasurement();
+  scd4x.setTemperatureOffset(getTempOffset());
+  scd4x.startPeriodicMeasurement();
+  if (useWiFi) {
+    startWiFi();
+  } else {
+    WiFi.disconnect();
+    WiFi.mode(WIFI_OFF);
+    esp_wifi_stop();
+    goto_light_sleep(1); // clear ESP_SLEEP_WAKEUP_GPIO
+  }
+}
+
 void toggleWiFi() {
   useWiFi = !useWiFi;
   preferences.begin("co2-sensor", false);
   preferences.putBool("WiFi", useWiFi);
   preferences.end();
   displayWiFi(useWiFi);
-  
-  if(!BatteryMode) {
-    scd4x.stopPeriodicMeasurement();
-    scd4x.setTemperatureOffset(getTempOffset());
-    scd4x.startPeriodicMeasurement();
-    if (useWiFi) {
-      startWiFi();
-    } else {
-      WiFi.disconnect();
-      WiFi.mode(WIFI_OFF);
-      esp_wifi_stop();
-      goto_light_sleep(1); // clear ESP_SLEEP_WAKEUP_GPIO
-    }
-  }
-
+  if (!BatteryMode) handleWiFiChange();
   delay(500);
-  unsigned long StartTime = millis();
-  for (;;) { 
-    if ((millis() - StartTime) > 20000 || digitalRead(BUTTON) == 0) return; // wait for button press OR up to 20 sec
+
+  bool ip_shown = false;
+  while (digitalRead(BUTTON) != 0) { // wait for button press
+    delay(100);
+    if (!ip_shown && WiFi.status() == WL_CONNECTED) {
+      ip_shown = true;
+      displayWiFi(useWiFi); // to update displayed IP
+      wifiManager.process();
+    }
+    if (BatteryMode && (digitalRead(USB_PRESENT) == HIGH)) { // power got connected
+      BatteryMode = false;
+      handleWiFiChange();
+    }
   }
 }
 
@@ -478,18 +490,33 @@ enum MenuOptions {
   CALIBRATE,
   HISTORY,
   WLAN,
+  INFO,
   EXIT,
   NUM_OPTIONS
 };
 
+#define ENGLISH
+#ifdef ENGLISH
 const char* menuItems[NUM_OPTIONS] = {
   "LED on/off",
   "Rainbow",
   "Calibrate",
   "History",
   "Wi-Fi",
+  "Info",
   "Exit"
 };
+#else
+const char* menuItems[NUM_OPTIONS] = {
+  "LED ein/aus",
+  "Regenbogen",
+  "Kalibrieren",
+  "Historie",
+  "WLAN",
+  "Info",
+  "Beenden"
+};
+#endif
 
 void handleButtonPress() {
   uint8_t selectedOption = 0;
@@ -537,6 +564,11 @@ void handleButtonPress() {
           case WLAN:
             toggleWiFi();
             refreshes = 1;
+            return;
+          case INFO:
+              displayinfo();
+              while (digitalRead(BUTTON) != 0) delay(100); // wait for button press
+              refreshes = 1;
             return;   
           case EXIT:
             while(digitalRead(BUTTON) == 0) {} // wait until button is released
@@ -544,8 +576,8 @@ void handleButtonPress() {
             return;
         }
       } else { // goto next Menu point
-        if (selectedOption+1 == NUM_OPTIONS) selectedOption = 0;
-        else selectedOption++;
+        selectedOption++;
+        selectedOption %= NUM_OPTIONS;
         displayMenu(selectedOption);
         menuStartTime = millis(); // display Menu again for 20 sec
       }
@@ -583,6 +615,22 @@ void startWiFi() {
   server.begin();
   Serial.println("HTTP server started at ip " + WiFi.localIP().toString() + ":" + String(port));
 #endif /* airgradient */
+
+  configTime(0, 0, "pool.ntp.org");
+  setenv("TZ", "CET-1CEST,M3.5.0,M10.5.0/3", 1); // Europe/Berlin time zone from https://github.com/nayarsystems/posix_tz_db/blob/master/zones.csv
+  tzset();
+}
+
+float currentTemp = temperatureRead();
+RTC_DATA_ATTR float ESP32temps[10] = {currentTemp,currentTemp,currentTemp,currentTemp,currentTemp,currentTemp,currentTemp,currentTemp,currentTemp,currentTemp};
+RTC_DATA_ATTR float sumTemp = currentTemp * 10;
+RTC_DATA_ATTR int indexTemp = 0;
+void measureESP32temperature() {
+  currentTemp = temperatureRead();
+  sumTemp -= ESP32temps[indexTemp];
+  ESP32temps[indexTemp] = currentTemp;
+  sumTemp += currentTemp;
+  indexTemp = (indexTemp + 1) % 10;
 }
 
 void setup() {
@@ -631,6 +679,7 @@ void setup() {
 void loop() {
   if (!useWiFi && esp_sleep_get_wakeup_cause() == ESP_SLEEP_WAKEUP_GPIO) handleButtonPress();
   updateBatteryMode(); // check again in USB Power mode
+  measureESP32temperature();
 
   if (useWiFi && !BatteryMode) wifiManager.process();
 
@@ -639,7 +688,8 @@ void loop() {
   if (ready_error || !isDataReady) {
     // needed to overwrite displayed Menu 
     displayWriteMeasuerments(co2, temperature, humidity);
-    if(BatteryMode) displayBattery(calcBatteryPercentage(readBatteryVoltage()));
+    if (BatteryMode) displayBattery(calcBatteryPercentage(readBatteryVoltage()));
+    else if (useWiFi) displayWiFiStrengh(); 
     updateDisplay();
 
     if (BatteryMode) goto_deep_sleep(29000);
@@ -705,7 +755,7 @@ void loop() {
     Serial.print(humidity);
     Serial.print('\t');
 #endif
-    displayWriteTestResults(readBatteryVoltage(), sensorStatus, serial0, serial1, serial2);
+    displayWriteTestResults(readBatteryVoltage(), sensorStatus);
   } else {
     /* Print Battery % */
     if (BatteryMode) {
