@@ -67,7 +67,9 @@ RTC_DATA_ATTR bool initDone = false;
 RTC_DATA_ATTR bool BatteryMode = false;
 RTC_DATA_ATTR bool comingFromDeepSleep = false;
 RTC_DATA_ATTR int ledbrightness = 5;
-RTC_DATA_ATTR bool LEDalwaysOn = false;
+RTC_DATA_ATTR bool LEDonBattery = false;
+RTC_DATA_ATTR bool LEDonUSB = true;
+RTC_DATA_ATTR bool useSmoothLEDcolor = true;
 RTC_DATA_ATTR int HWSubRev = 1; //default only
 RTC_DATA_ATTR float maxBatteryVoltage;
 RTC_DATA_ATTR bool useWiFi;
@@ -176,7 +178,7 @@ void initOnce() {
     EEPROM.write(0, 0); //reset welcome
     EEPROM.write(1, 2); //write HWSubRev 2
     EEPROM.commit();
-    preferences.begin("co2-sensor", true); 
+    preferences.begin("co2-sensor", false); 
     preferences.putFloat("MBV", 3.95); //default maxBatteryVoltage
     preferences.end();
 
@@ -197,6 +199,10 @@ void initOnce() {
   preferences.begin("co2-sensor", true);
   maxBatteryVoltage = preferences.getFloat("MBV", 3.95);
   useWiFi = preferences.getBool("WiFi", false);
+  LEDonBattery = preferences.getBool("LEDonBattery", false);
+  LEDonUSB = preferences.getBool("LEDonUSB", true);
+  ledbrightness = preferences.getInt("ledbrightness", 5);
+  useSmoothLEDcolor = preferences.getBool("useSmoothLEDcolor", true);
   preferences.end();
 
   scd4x.stopPeriodicMeasurement(); // stop potentially previously started measurement
@@ -212,7 +218,9 @@ void initOnce() {
 }
 
 void setLED(uint16_t co2) {
-  if (BatteryMode && !LEDalwaysOn) {
+  updateBatteryMode();
+  if ((BatteryMode && !LEDonBattery)
+  || (!BatteryMode && !LEDonUSB)) {
     digitalWrite(LED_POWER, HIGH); // LED OFF
     strip.clear();
     strip.show();
@@ -223,11 +231,27 @@ void setLED(uint16_t co2) {
 
   int red = 0, green = 0, blue = 0;
 
-  if (co2 > 2000) {
-    red = 216; green = 2; blue = 131; // magenta
+  if (useSmoothLEDcolor) {
+    if (co2 > 2000) {
+      red = 216; green = 2; blue = 131; // magenta
+    } else {
+      red   =   pow((co2 - 400), 2) / 10000;
+      green = - pow((co2 - 400), 2) / 4500 + 255;
+    }
   } else {
-    red   =   pow((co2 - 400), 2) / 10000;
-    green = - pow((co2 - 400), 2) / 4500 + 255;
+    if (co2 < 600) {
+      green = 255;
+    } else if(co2 < 800) {
+      red = 60; green = 200;
+    } else if(co2 < 1000) {
+      red = 140; green = 120;
+    } else if(co2 < 1500) {
+      red = 200; green = 60;
+    } else if(co2 < 2000) {
+      red = 255;
+    } else {
+      red = 216; green = 2; blue = 131; // magenta
+    }
   }
   if (red < 0) red = 0;
   if (red > 255) red = 255;
@@ -291,7 +315,7 @@ void goto_deep_sleep(int ms) {
   esp_sleep_enable_ext1_wakeup(0x1,ESP_EXT1_WAKEUP_ALL_LOW); // 2^0 = GPIO_NUM_0 = BUTTON
 
   /* Keep LED enabled */
-  if (LEDalwaysOn) gpio_hold_en(LED_POWER);
+  if (LEDonBattery) gpio_hold_en(LED_POWER);
   else gpio_hold_dis(LED_POWER);
   
   comingFromDeepSleep = true;
@@ -494,11 +518,19 @@ enum MenuOptions {
   EXIT,
   NUM_OPTIONS
 };
+enum LEDMenuOptions {
+  onBATTERY,
+  onUSB,
+  COLOR,
+  BRIGHTNESS,
+  EXIT_LED,
+  NUM_LED_OPTIONS
+};
 
 #define ENGLISH
 #ifdef ENGLISH
 const char* menuItems[NUM_OPTIONS] = {
-  "LED on/off",
+  "LED",
   "Rainbow",
   "Calibrate",
   "History",
@@ -506,14 +538,28 @@ const char* menuItems[NUM_OPTIONS] = {
   "Info",
   "Exit"
 };
+const char* LEDmenuItems[NUM_LED_OPTIONS] = {
+  "Battery",
+  "on USB",
+  "Color",
+  "Bright",
+  "Exit"
+};
 #else
 const char* menuItems[NUM_OPTIONS] = {
-  "LED ein/aus",
+  "LED",
   "Regenbogen",
   "Kalibrieren",
   "Historie",
   "WLAN",
   "Info",
+  "Beenden"
+};
+const char* LEDmenuItems[NUM_LED_OPTIONS] = {
+  "Batterie",
+  "mit USB",
+  "Farbe",
+  "Hell",
   "Beenden"
 };
 #endif
@@ -522,6 +568,7 @@ void handleButtonPress() {
   uint8_t selectedOption = 0;
   extern int refreshes;
   refreshes = 1; // force full update
+  comingFromDeepSleep = false; // force display update even if CO2 changed by less than 3%
   displayMenu(selectedOption);
 
   uint16_t mspressed;
@@ -543,9 +590,7 @@ void handleButtonPress() {
       if (mspressed > 1000) { // long press
         switch (selectedOption) {
           case LED:
-            LEDalwaysOn = !LEDalwaysOn;
-            setLED(co2);
-            while(digitalRead(BUTTON) == 0) {} // wait until button is released
+            LEDMenu();
             refreshes = 1;
             return;
           case RAINBOW:
@@ -566,9 +611,9 @@ void handleButtonPress() {
             refreshes = 1;
             return;
           case INFO:
-              displayinfo();
-              while (digitalRead(BUTTON) != 0) delay(100); // wait for button press
-              refreshes = 1;
+            displayinfo();
+            while (digitalRead(BUTTON) != 0) delay(100); // wait for button press
+            refreshes = 1;
             return;   
           case EXIT:
             while(digitalRead(BUTTON) == 0) {} // wait until button is released
@@ -581,6 +626,63 @@ void handleButtonPress() {
         displayMenu(selectedOption);
         menuStartTime = millis(); // display Menu again for 20 sec
       }
+    }
+  }
+}
+
+void LEDMenu() {
+  uint8_t selectedOption = 0;
+  displayLEDMenu(selectedOption);
+  uint16_t mspressed;
+  unsigned long menuStartTime = millis();
+
+  for (;;) { 
+    if ((millis() - menuStartTime) > 20000) return; // display LED Menu up to 20 sec
+    mspressed = 0;
+    if (digitalRead(BUTTON) == 0) {
+      while(digitalRead(BUTTON) == 0) { // calculate how long BUTTON is pressed
+        delay(100);
+        mspressed += 100;
+        if (mspressed > 1000) break;
+      }
+      if (mspressed > 1000) { // long press
+        switch (selectedOption) {
+          case onBATTERY:
+            LEDonBattery = !LEDonBattery;
+            preferences.begin("co2-sensor", false);
+            preferences.putBool("LEDonBattery", LEDonBattery);
+            preferences.end();
+            break;
+          case onUSB:
+            LEDonUSB = !LEDonUSB;
+            preferences.begin("co2-sensor", false);
+            preferences.putBool("LEDonUSB", LEDonUSB);
+            preferences.end();
+            break;
+          case COLOR:
+            useSmoothLEDcolor = !useSmoothLEDcolor;
+            preferences.begin("co2-sensor", false);
+            preferences.putBool("useSmoothLEDcolor", useSmoothLEDcolor);
+            preferences.end();
+            break;
+          case BRIGHTNESS:
+            ledbrightness += 20; // 5 25 45 65 85
+            ledbrightness %= 100;
+            preferences.begin("co2-sensor", false);
+            preferences.putInt("ledbrightness", 5);
+            preferences.end();
+            break;
+          case EXIT_LED:
+            while(digitalRead(BUTTON) == 0) {} // wait until button is released
+            return;
+        }
+      } else { // goto next Menu point
+        selectedOption++;
+        selectedOption %= NUM_LED_OPTIONS;
+      }
+      setLED(co2);
+      displayLEDMenu(selectedOption);
+      menuStartTime = millis(); // display LED Menu again for 20 sec
     }
   }
 }

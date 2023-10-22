@@ -305,6 +305,35 @@ void displayMenu(uint8_t selectedOption) {
   updateDisplay();
 }
 
+void displayLEDMenu(uint8_t selectedOption) {
+  Paint_Clear(WHITE);
+  Paint_DrawString_EN(75, 0, "LED", &Font24, WHITE, BLACK);
+  Paint_DrawLine(10, 23, 190, 23, BLACK, DOT_PIXEL_1X1, LINE_STYLE_SOLID);
+
+  for (int i=0; i<NUM_LED_OPTIONS; i++) {
+    Paint_DrawString_EN(5, 25*(i+1), LEDmenuItems[i], &Font24, WHITE, BLACK);
+  }
+#ifdef ENGLISH
+  Paint_DrawString_EN(149, 25, (LEDonBattery? "ON":"OFF"), &Font24, WHITE, BLACK);
+  Paint_DrawString_EN(149, 50, (LEDonUSB? "ON":"OFF"), &Font24, WHITE, BLACK);
+#else
+  Paint_DrawString_EN(149, 25, (LEDonBattery? "AN":"AUS"), &Font24, WHITE, BLACK);
+  Paint_DrawString_EN(149, 50, (LEDonUSB? "AN":"AUS"), &Font24, WHITE, BLACK);
+#endif
+  Paint_DrawString_EN(149, 75, (useSmoothLEDcolor? "1":"2"), &Font24, WHITE, BLACK);
+  Paint_DrawString_EN(166, 75, "/2", &Font24, WHITE, BLACK);
+  Paint_DrawNum(149, 100, (int32_t)(ledbrightness/20+1), &Font24, BLACK, WHITE); // 5 25 45 65 85
+  Paint_DrawString_EN(166, 100, "/5", &Font24, WHITE, BLACK);
+
+  /* invert the selectedOption */
+  for (int x = 0; x < 200; x++) {
+    for (int y = 25*(selectedOption+1)/8; y < 25*(selectedOption+2)/8; y++) {
+      BlackImage[y+x*25] = ~BlackImage[y+x*25];
+    }
+  }
+  updateDisplay();
+}
+
 void displayCalibrationWarning() {
   Paint_Clear(BLACK);
 

@@ -17,6 +17,7 @@ void displayRainbow();
 void displayHistory(uint16_t measurements[24][120]);
 void displayNoHistory();
 void displayMenu(uint8_t selectedOption);
+void displayLEDMenu(uint8_t selectedOption);
 void displayCalibrationWarning();
 void displayWiFi(bool useWiFi);
 void displayWiFiStrengh();
