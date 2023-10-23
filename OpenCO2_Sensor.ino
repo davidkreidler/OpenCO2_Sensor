@@ -491,7 +491,7 @@ void toggleWiFi() {
   preferences.end();
   displayWiFi(useWiFi);
   if (!BatteryMode) handleWiFiChange();
-  delay(500);
+  //delay(500);
 
   bool ip_shown = false;
   while (digitalRead(BUTTON) != 0) { // wait for button press
@@ -612,6 +612,10 @@ void handleButtonPress() {
             return;
           case INFO:
             displayinfo();
+            /*if (WiFi.status() == WL_CONNECTED) {
+              ota_http_update();
+              delay(5000);
+            }*/
             while (digitalRead(BUTTON) != 0) delay(100); // wait for button press
             refreshes = 1;
             return;   
