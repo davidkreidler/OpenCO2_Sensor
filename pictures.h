@@ -4,5 +4,6 @@
 extern const unsigned char gImage_init[];
 extern const unsigned char gImage_welcome[];
 extern const unsigned char gImage_rainbow[];
+extern const unsigned char gImage_santa[];
 
 #endif

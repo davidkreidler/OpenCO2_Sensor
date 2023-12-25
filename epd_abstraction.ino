@@ -52,10 +52,10 @@ void displayWelcome() {
   esp_deep_sleep_start();
 }
 
-void displayRainbow() {
+void displayImage(const unsigned char* image_buffer) {
 #ifdef EINK_1IN54V2
   EPD_1IN54_V2_Init();
-  Paint_DrawBitMap(gImage_rainbow);
+  Paint_DrawBitMap(image_buffer);
   EPD_1IN54_V2_Display(BlackImage);
   EPD_1IN54_V2_Sleep();
 #endif

@@ -13,7 +13,7 @@ void displayWriteMeasuerments(uint16_t co2, uint16_t temperature, uint16_t humid
 void displayWriteTestResults(float voltage, uint16_t sensorStatus);
 void displayBattery(uint8_t percentage);
 void updateDisplay();
-void displayRainbow();
+void displayImage(const unsigned char* image_buffer);
 void displayHistory(uint16_t measurements[24][120]);
 void displayNoHistory();
 void displayMenu(uint8_t selectedOption);

@@ -7,7 +7,7 @@
    - Sensirion I2C SCD4x: https://github.com/Sensirion/arduino-i2c-scd4x
    - WiFiManager: https://github.com/tzapu/WiFiManager
 */
-#define VERSION "v4.2"
+#define VERSION "v4.3"
 
 /* Includes display */
 #include "DEV_Config.h"
@@ -397,10 +397,32 @@ void calibrate() {
   ESP.restart();
 }
 
+#include "pictures.h"
 void rainbowMode() {
-  displayRainbow();
+  displayImage(gImage_santa); // gImage_rainbow
   digitalWrite(LED_POWER, LOW); //LED ON
 
+  // Santa
+  for(int j = 0; j < 256; j++) {
+    int red = 0, green = 0, blue = 0;
+
+    if (j < 85) {
+      red = ((float)j / 85.0f) * 255.0f;
+    } else if (j < 170) {
+      green = ((float)(j - 85) / 85.0f) * 255.0f;
+    } else if (j < 256) {
+      red = ((float)(j - 170) / 85.0f) * 255.0f;
+      blue = ((float)(j - 170) / 85.0f) * 255.0f;
+      green = ((float)(j - 170) / 85.0f) * 255.0f;
+    }
+
+    strip.setPixelColor(0, green, red, blue);
+    strip.show();
+    if (j == 255) j=0;
+    if (digitalRead(BUTTON) == 0) return;
+    delay(20);
+  
+  /* Rainbow 
   for(int j = 0; j < 256; j++) {
     int red = 1, green = 0, blue = 0;
 
@@ -420,6 +442,7 @@ void rainbowMode() {
     if (j == 255) j=0;
     if (digitalRead(BUTTON) == 0) return;
     delay(20);
+    */
   }
 }
 
@@ -531,7 +554,7 @@ enum LEDMenuOptions {
 #ifdef ENGLISH
 const char* menuItems[NUM_OPTIONS] = {
   "LED",
-  "Rainbow",
+  "Santa",//"Rainbow",
   "Calibrate",
   "History",
   "Wi-Fi",
@@ -548,7 +571,7 @@ const char* LEDmenuItems[NUM_LED_OPTIONS] = {
 #else
 const char* menuItems[NUM_OPTIONS] = {
   "LED",
-  "Regenbogen",
+  "Weihnachten",//"Regenbogen",
   "Kalibrieren",
   "Historie",
   "WLAN",
@@ -564,6 +587,7 @@ const char* LEDmenuItems[NUM_LED_OPTIONS] = {
 };
 #endif
 
+bool buttonPressedAgain = false;
 void handleButtonPress() {
   uint8_t selectedOption = 0;
   extern int refreshes;
@@ -621,13 +645,24 @@ void handleButtonPress() {
             return;
         }
       } else { // goto next Menu point
-        selectedOption++;
-        selectedOption %= NUM_OPTIONS;
-        displayMenu(selectedOption);
-        menuStartTime = millis(); // display Menu again for 20 sec
+        buttonPressedAgain = true; // display at least once
+        while (buttonPressedAgain) {
+          buttonPressedAgain = false;
+          selectedOption++;
+          selectedOption %= NUM_OPTIONS;
+          attachInterrupt(digitalPinToInterrupt(BUTTON), buttonInterrupt, FALLING);
+          displayMenu(selectedOption);
+          detachInterrupt(digitalPinToInterrupt(BUTTON));
+          menuStartTime = millis(); // display Menu again for 20 sec
+          if (digitalRead(BUTTON) == 0) break; // long press detected
+        }
       }
     }
   }
+}
+
+void buttonInterrupt() {
+  buttonPressedAgain = true;
 }
 
 void LEDMenu() {
@@ -669,20 +704,29 @@ void LEDMenu() {
             ledbrightness += 20; // 5 25 45 65 85
             ledbrightness %= 100;
             preferences.begin("co2-sensor", false);
-            preferences.putInt("ledbrightness", 5);
+            preferences.putInt("ledbrightness", ledbrightness);
             preferences.end();
             break;
           case EXIT_LED:
             while(digitalRead(BUTTON) == 0) {} // wait until button is released
             return;
         }
+        setLED(co2);
+        displayLEDMenu(selectedOption);
+        menuStartTime = millis(); // display LED Menu again for 20 sec
       } else { // goto next Menu point
-        selectedOption++;
-        selectedOption %= NUM_LED_OPTIONS;
+        buttonPressedAgain = true; // display at least once
+        while (buttonPressedAgain) {
+          buttonPressedAgain = false;
+          selectedOption++;
+          selectedOption %= NUM_LED_OPTIONS;
+          attachInterrupt(digitalPinToInterrupt(BUTTON), buttonInterrupt, FALLING);
+          displayLEDMenu(selectedOption);
+          detachInterrupt(digitalPinToInterrupt(BUTTON));
+          menuStartTime = millis(); // display LED Menu again for 20 sec
+          if (digitalRead(BUTTON) == 0) break; // long press detected
+        }
       }
-      setLED(co2);
-      displayLEDMenu(selectedOption);
-      menuStartTime = millis(); // display LED Menu again for 20 sec
     }
   }
 }
@@ -700,8 +744,13 @@ void startWiFi() {
   wifiManager.addParameter(&custom_mqtt_port);
   wifiManager.addParameter(&custom_api_token);
 #endif /* MQTT */
+
+  char Hostname[28];
+  snprintf(Hostname, 28, "OpenCO2-Sensor%llX", ESP.getEfuseMac());
+  WiFi.setHostname(Hostname); // hostname when conneced to home network
+
   wifiManager.setConfigPortalBlocking(false);
-  wifiManager.autoConnect("OpenCO2 Sensor");
+  wifiManager.autoConnect("OpenCO2 Sensor");  // name of broadcasted SSID  
 
 #ifdef MQTT
   loadCredentials();
