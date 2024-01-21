@@ -53,6 +53,11 @@ Press the Menu button on the backside of the OpenCO2 Sensor. Select an option vi
 Enable Wi-Fi via the Menu button. When power is connected, an access point `OpenCO2 Sensor` is enabled. Connect to it and navigate to http://192.168.4.1 (it will open automatically on modern Smartphones). Insert your home Wi-Fi credentials under `Configure WiFi`. Choose your network name from the list in the top and insert the password. Click `Save`. The sensor will now be automatically connected. Navigate to ip:9925 to see current co2/temperature/humidity measurements.
 ![alt text](https://github.com/davidkreidler/OpenCO2_Sensor/raw/main/pictures/setup.jpg)
 
+# AirGradient / Grafana
+
+Use [internet-pi](https://github.com/geerlingguy/internet-pi) to store the CO2 / Temperature / Humidity data on your Pi. First connect the OpenCO2 Sensor to your Wi-Fi network and follow the instructions https://www.youtube.com/watch?v=Cmr5VNALRAg Then download the https://raw.githubusercontent.com/davidkreidler/OpenCO2_Sensor/main/grafana_OpenCO2_Sensor.json and import it into Grafana.
+![alt text](https://github.com/davidkreidler/OpenCO2_Sensor/raw/main/pictures/grafana.png)
+
 # OTA Update
 
 Download `OpenCO2_Sensor.ino.bin` from the latest [release](https://github.com/davidkreidler/OpenCO2_Sensor/releases).
