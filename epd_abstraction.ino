@@ -563,8 +563,12 @@ void displayinfo() {
     Paint_DrawString_EN(1, 168, signalStrength, &Font16, WHITE, BLACK);
 
     String ip = "IP:" + WiFi.localIP().toString();
-    Paint_DrawString_EN(1, 184, ip.c_str(), &Font16, WHITE, BLACK); //3*4+3=15  * 11px=
+    Paint_DrawString_EN(1, 184, ip.c_str(), &Font16, WHITE, BLACK);
   }
+
+  Paint_DrawString_EN(1, 129, "USB_ACTIVE:", &Font16, WHITE, BLACK);
+  Paint_DrawString_EN(122, 129, USB_ACTIVE? "yes":"no", &Font16, WHITE, BLACK);
+
   updateDisplay();
 }
 

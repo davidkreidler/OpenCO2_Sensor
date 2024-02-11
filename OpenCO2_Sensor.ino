@@ -7,7 +7,7 @@
    - Sensirion I2C SCD4x: https://github.com/Sensirion/arduino-i2c-scd4x
    - WiFiManager: https://github.com/tzapu/WiFiManager
 */
-#define VERSION "v4.3"
+#define VERSION "v4.4"
 
 /* Includes display */
 #include "DEV_Config.h"
@@ -63,6 +63,15 @@ Adafruit_DotStar strip(1, 40, 39, DOTSTAR_BRG); // numLEDs, DATAPIN, CLOCKPIN
 #include <Wire.h>
 SensirionI2CScd4x scd4x;
 
+
+#ifndef ARDUINO_USB_MODE
+#error This ESP32 SoC has no Native USB interface
+#elif ARDUINO_USB_MODE == 1
+#error This sketch should be used when USB is in OTG mode and MSC On Boot enabeled
+#endif
+#include "USB.h"
+
+RTC_DATA_ATTR bool USB_ACTIVE = false;
 RTC_DATA_ATTR bool initDone = false;
 RTC_DATA_ATTR bool BatteryMode = false;
 RTC_DATA_ATTR bool comingFromDeepSleep = false;
@@ -322,10 +331,32 @@ void goto_deep_sleep(int ms) {
   esp_deep_sleep_start();
 }
 
+static void usbEventCallback(void* arg, esp_event_base_t event_base, int32_t event_id, void* event_data){
+  if(event_base == ARDUINO_USB_EVENTS){
+    switch (event_id){
+      case ARDUINO_USB_STARTED_EVENT:
+        USB_ACTIVE = true;
+        break;
+      case ARDUINO_USB_STOPPED_EVENT:
+        USB_ACTIVE = false;
+        break;
+      case ARDUINO_USB_SUSPEND_EVENT:
+        USB_ACTIVE = false;
+        break;
+      case ARDUINO_USB_RESUME_EVENT:
+        USB_ACTIVE = true;
+        break;
+
+      default:
+        break;
+    }
+  }
+}
+
 void goto_light_sleep(int ms) {
   comingFromDeepSleep = false;
 
-  if (useWiFi || TEST_MODE) {
+  if (useWiFi || TEST_MODE || USB_ACTIVE) {
     for (int i=0; i<(ms/100); i++) {
       if (digitalRead(BUTTON) == 0) {
         handleButtonPress();
@@ -399,11 +430,11 @@ void calibrate() {
 
 #include "pictures.h"
 void rainbowMode() {
-  displayImage(gImage_santa); // gImage_rainbow
+  displayImage(gImage_rainbow); //  gImage_santa
   digitalWrite(LED_POWER, LOW); //LED ON
 
   // Santa
-  for(int j = 0; j < 256; j++) {
+  /*for(int j = 0; j < 256; j++) {
     int red = 0, green = 0, blue = 0;
 
     if (j < 85) {
@@ -421,8 +452,9 @@ void rainbowMode() {
     if (j == 255) j=0;
     if (digitalRead(BUTTON) == 0) return;
     delay(20);
+  }*/  
   
-  /* Rainbow 
+  // Rainbow 
   for(int j = 0; j < 256; j++) {
     int red = 1, green = 0, blue = 0;
 
@@ -442,7 +474,6 @@ void rainbowMode() {
     if (j == 255) j=0;
     if (digitalRead(BUTTON) == 0) return;
     delay(20);
-    */
   }
 }
 
@@ -554,7 +585,7 @@ enum LEDMenuOptions {
 #ifdef ENGLISH
 const char* menuItems[NUM_OPTIONS] = {
   "LED",
-  "Santa",//"Rainbow",
+  "Rainbow",//"Santa",
   "Calibrate",
   "History",
   "Wi-Fi",
@@ -571,7 +602,7 @@ const char* LEDmenuItems[NUM_LED_OPTIONS] = {
 #else
 const char* menuItems[NUM_OPTIONS] = {
   "LED",
-  "Weihnachten",//"Regenbogen",
+  "Regenbogen",//"Weihnachten",
   "Kalibrieren",
   "Historie",
   "WLAN",
@@ -795,6 +826,7 @@ void setup() {
   Wire.begin(33, 34); // grün, gelb
   scd4x.begin(Wire);
 
+  USB.onEvent(usbEventCallback);
   if (!initDone) initOnce();
 
 #if ARDUINO_USB_CDC_ON_BOOT && !ARDUINO_USB_MODE
