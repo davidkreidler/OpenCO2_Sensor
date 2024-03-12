@@ -39,6 +39,9 @@ WebServer server(port);
 
 //#define MQTT
 #ifdef MQTT
+#ifdef airgradient
+#error only activate one: MQTT or airgradient
+#endif /*airgradient*/
 #include <ArduinoMqttClient.h>
 WiFiClient wifiClient;
 MqttClient mqttClient(wifiClient);
@@ -79,6 +82,8 @@ RTC_DATA_ATTR int ledbrightness = 5;
 RTC_DATA_ATTR bool LEDonBattery = false;
 RTC_DATA_ATTR bool LEDonUSB = true;
 RTC_DATA_ATTR bool useSmoothLEDcolor = true;
+RTC_DATA_ATTR bool invertDisplay = false;
+RTC_DATA_ATTR bool useFahrenheit = false;
 RTC_DATA_ATTR int HWSubRev = 1; //default only
 RTC_DATA_ATTR float maxBatteryVoltage;
 RTC_DATA_ATTR bool useWiFi;
@@ -212,6 +217,8 @@ void initOnce() {
   LEDonUSB = preferences.getBool("LEDonUSB", true);
   ledbrightness = preferences.getInt("ledbrightness", 5);
   useSmoothLEDcolor = preferences.getBool("useSmoothLEDcolor", true);
+  invertDisplay = preferences.getBool("invertDisplay", false);
+  useFahrenheit = preferences.getBool("useFahrenheit", false);
   preferences.end();
 
   scd4x.stopPeriodicMeasurement(); // stop potentially previously started measurement
@@ -564,12 +571,12 @@ void toggleWiFi() {
 
 enum MenuOptions {
   LED,
-  RAINBOW,
+  DISPLAY_MENU,
   CALIBRATE,
   HISTORY,
   WLAN,
   INFO,
-  EXIT,
+  RAINBOW,
   NUM_OPTIONS
 };
 enum LEDMenuOptions {
@@ -580,17 +587,23 @@ enum LEDMenuOptions {
   EXIT_LED,
   NUM_LED_OPTIONS
 };
+enum DisplayMenuOptions {
+  INVERT,
+  TEMP_UNIT,
+  EXIT_DISPLAY,
+  NUM_DISPLAY_OPTIONS
+};
 
 #define ENGLISH
 #ifdef ENGLISH
 const char* menuItems[NUM_OPTIONS] = {
   "LED",
-  "Rainbow",//"Santa",
+  "Display",
   "Calibrate",
   "History",
   "Wi-Fi",
   "Info",
-  "Exit"
+  "Rainbow"//"Santa"
 };
 const char* LEDmenuItems[NUM_LED_OPTIONS] = {
   "Battery",
@@ -599,21 +612,31 @@ const char* LEDmenuItems[NUM_LED_OPTIONS] = {
   "Bright",
   "Exit"
 };
+const char* OptionsMenuItems[NUM_DISPLAY_OPTIONS] = {
+  "Invert",
+  "Unit",
+  "Exit"
+};
 #else
 const char* menuItems[NUM_OPTIONS] = {
   "LED",
-  "Regenbogen",//"Weihnachten",
+  "Display",
   "Kalibrieren",
   "Historie",
   "WLAN",
   "Info",
-  "Beenden"
+  "Regenbogen"//"Weihnachten"
 };
 const char* LEDmenuItems[NUM_LED_OPTIONS] = {
   "Batterie",
   "mit USB",
   "Farbe",
   "Hell",
+  "Beenden"
+};
+const char* OptionsMenuItems[NUM_DISPLAY_OPTIONS] = {
+  "Invert",
+  "Einheit",
   "Beenden"
 };
 #endif
@@ -648,9 +671,8 @@ void handleButtonPress() {
             LEDMenu();
             refreshes = 1;
             return;
-          case RAINBOW:
-            rainbowMode();
-            setLED(co2);
+          case DISPLAY_MENU:
+            OptionsMenu();
             refreshes = 1;
             return;
           case CALIBRATE:
@@ -669,9 +691,10 @@ void handleButtonPress() {
             displayinfo();
             while (digitalRead(BUTTON) != 0) delay(100); // wait for button press
             refreshes = 1;
-            return;   
-          case EXIT:
-            while(digitalRead(BUTTON) == 0) {} // wait until button is released
+            return;
+          case RAINBOW:
+            rainbowMode();
+            setLED(co2);
             refreshes = 1;
             return;
         }
@@ -755,6 +778,59 @@ void LEDMenu() {
           displayLEDMenu(selectedOption);
           detachInterrupt(digitalPinToInterrupt(BUTTON));
           menuStartTime = millis(); // display LED Menu again for 20 sec
+          if (digitalRead(BUTTON) == 0) break; // long press detected
+        }
+      }
+    }
+  }
+}
+
+void OptionsMenu() {  
+  uint8_t selectedOption = 0;
+  displayOptionsMenu(selectedOption);
+
+  uint16_t mspressed;
+  unsigned long menuStartTime = millis();
+
+  for (;;) { 
+    if ((millis() - menuStartTime) > 20000) return; // display up to 20 sec
+    mspressed = 0;
+    if (digitalRead(BUTTON) == 0) {
+      while(digitalRead(BUTTON) == 0) { // calculate how long BUTTON is pressed
+        delay(100);
+        mspressed += 100;
+        if (mspressed > 1000) break;
+      }
+      if (mspressed > 1000) { // long press
+        switch (selectedOption) {
+          case INVERT:
+            invertDisplay = !invertDisplay;
+            preferences.begin("co2-sensor", false);
+            preferences.putBool("invertDisplay", invertDisplay);
+            preferences.end();
+            break;
+          case TEMP_UNIT:
+            useFahrenheit = !useFahrenheit;
+            preferences.begin("co2-sensor", false);
+            preferences.putBool("useFahrenheit", useFahrenheit);
+            preferences.end(); 
+            break;
+          case EXIT_DISPLAY:
+            while(digitalRead(BUTTON) == 0) {} // wait until button is released
+            return;
+        }
+        displayOptionsMenu(selectedOption);
+        menuStartTime = millis(); // display again for 20 sec
+      } else { // goto next Menu point
+        buttonPressedAgain = true; // display at least once
+        while (buttonPressedAgain) {
+          buttonPressedAgain = false;
+          selectedOption++;
+          selectedOption %= NUM_DISPLAY_OPTIONS;
+          attachInterrupt(digitalPinToInterrupt(BUTTON), buttonInterrupt, FALLING);
+          displayOptionsMenu(selectedOption);
+          detachInterrupt(digitalPinToInterrupt(BUTTON));
+          menuStartTime = millis(); // display again for 20 sec
           if (digitalRead(BUTTON) == 0) break; // long press detected
         }
       }

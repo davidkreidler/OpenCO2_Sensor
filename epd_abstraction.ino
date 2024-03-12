@@ -79,10 +79,11 @@ void displayInitTestMode() {
 #ifdef EINK_1IN54V2
   Paint_DrawBitMap(gImage_init);
   Paint_DrawString_EN(1, 1, VERSION, &Font16, WHITE, BLACK);
-  Paint_DrawNum(125, 25, 1, &mid, BLACK, WHITE);
+  Paint_DrawNum(125, 25, 1, &mid, BLACK, WHITE); // 15 sec for testmode
   EPD_1IN54_V2_Display(BlackImage);
 #endif
 #ifdef EINK_4IN2
+  Paint_DrawString_EN(1, 1, VERSION, &Font16, WHITE, BLACK);
   EPD_4IN2_Display(BlackImage);
 #endif
 }
@@ -95,6 +96,7 @@ void displayInit() {
   EPD_1IN54_V2_Sleep();
 #endif
 #ifdef EINK_4IN2
+  Paint_DrawString_EN(1, 1, VERSION, &Font16, WHITE, BLACK);
   EPD_4IN2_Display(BlackImage);
   EPD_4IN2_Sleep();
 #endif
@@ -141,20 +143,13 @@ void displayWriteMeasuerments(uint16_t co2, float temperature, float humidity) {
     Paint_DrawString_EN(144, 150, "ppm", &Font24, WHITE, BLACK);
 
     /* temperature */
-//#define useFahrenheit
-#ifdef useFahrenheit
-    temperature = (temperature*1.8f)+32.0f; // convert to °F
-    char unit[3] = "*F";
-#else
-    char unit[3] = "*C";
-#endif
+    if (useFahrenheit) temperature = (temperature*1.8f)+32.0f; // convert to °F
     if (temperature < 10.0f) Paint_DrawNum(30, 5, temperature, &mid, BLACK, WHITE);
     else                     Paint_DrawNum( 1, 5, temperature, &mid, BLACK, WHITE);
     int offset = 0;
-#ifdef useFahrenheit
-    if (temperature >= 100) offset = 29;
-#endif
-    Paint_DrawString_EN(60+offset, 4, unit, &sml, WHITE, BLACK);
+    if (temperature >= 100) offset = 29; // for Fahrenheit
+
+    Paint_DrawString_EN(60+offset, 4, useFahrenheit? "*F" : "*C", &sml, WHITE, BLACK);
     Paint_DrawString_EN(60+offset, 32, ",", &sml, WHITE, BLACK);
     char decimal[4];
     sprintf(decimal, "%d", ((int)(temperature * 10)) % 10);
@@ -164,6 +159,7 @@ void displayWriteMeasuerments(uint16_t co2, float temperature, float humidity) {
     Paint_DrawNum(124, 5, humidity, &mid, BLACK, WHITE);
     Paint_DrawString_EN(184, 5, "%", &sml, WHITE, BLACK);
 #endif /* EINK_1IN54V2 */
+
 #ifdef EINK_4IN2
     /* co2 */
                                  // Xstart,Ystart
@@ -289,19 +285,14 @@ void displayHistory(uint16_t measurements[24][120]) {
 }
 
 void displayMenu(uint8_t selectedOption) {
-  extern const char* menuItems[NUM_OPTIONS];
   Paint_Clear(WHITE);
   Paint_DrawString_EN(66, 0, "Menu", &Font24, WHITE, BLACK);
   Paint_DrawLine(10, 23, 190, 23, BLACK, DOT_PIXEL_1X1, LINE_STYLE_SOLID);
 
   for (int i=0; i<NUM_OPTIONS; i++) {
-    if (i == selectedOption) {
-      Paint_DrawRectangle(0, 25*(i+1), 200, 25*(i+2), BLACK, DOT_PIXEL_1X1, DRAW_FILL_FULL);
-      Paint_DrawString_EN(5, 25*(i+1), menuItems[i], &Font24, BLACK, WHITE);
-    } else {
-      Paint_DrawString_EN(5, 25*(i+1), menuItems[i], &Font24, WHITE, BLACK);
-    }
+    Paint_DrawString_EN(5, 25*(i+1), menuItems[i], &Font24, WHITE, BLACK);
   }
+  invertSelected(selectedOption);
   updateDisplay();
 }
 
@@ -313,6 +304,7 @@ void displayLEDMenu(uint8_t selectedOption) {
   for (int i=0; i<NUM_LED_OPTIONS; i++) {
     Paint_DrawString_EN(5, 25*(i+1), LEDmenuItems[i], &Font24, WHITE, BLACK);
   }
+
 #ifdef ENGLISH
   Paint_DrawString_EN(149, 25, (LEDonBattery? "ON":"OFF"), &Font24, WHITE, BLACK);
   Paint_DrawString_EN(149, 50, (LEDonUSB? "ON":"OFF"), &Font24, WHITE, BLACK);
@@ -325,13 +317,40 @@ void displayLEDMenu(uint8_t selectedOption) {
   Paint_DrawNum(149, 100, (int32_t)(ledbrightness/20+1), &Font24, BLACK, WHITE); // 5 25 45 65 85
   Paint_DrawString_EN(166, 100, "/5", &Font24, WHITE, BLACK);
 
-  /* invert the selectedOption */
+  invertSelected(selectedOption);
+  updateDisplay();
+}
+
+void displayOptionsMenu(uint8_t selectedOption) {
+  Paint_Clear(WHITE);
+  Paint_DrawString_EN(40, 0, "DISPLAY", &Font24, WHITE, BLACK);
+  Paint_DrawLine(10, 23, 190, 23, BLACK, DOT_PIXEL_1X1, LINE_STYLE_SOLID);
+
+  for (int i=0; i<NUM_DISPLAY_OPTIONS; i++) {
+    Paint_DrawString_EN(5, 25*(i+1), OptionsMenuItems[i], &Font24, WHITE, BLACK);
+  }
+  Paint_DrawString_EN(166, 50, (useFahrenheit? "*F":"*C"), &Font24, WHITE, BLACK);
+  invertSelected(selectedOption);
+  updateDisplay();
+}
+
+void invertSelected(uint8_t selectedOption) {
+#ifdef EINK_1IN54V2
   for (int x = 0; x < 200; x++) {
     for (int y = 25*(selectedOption+1)/8; y < 25*(selectedOption+2)/8; y++) {
       BlackImage[y+x*25] = ~BlackImage[y+x*25];
     }
   }
-  updateDisplay();
+#endif /* EINK_1IN54V2 */
+#ifdef EINK_4IN2
+  int Y_start = 25 * (selectedOption + 1);
+  int Y_end   = 25 * (selectedOption + 2);
+  for (int j = 0; j < Y_end - Y_start; j++) {
+    for (int i = 0; i < 200/8; i++) {
+      BlackImage[(Y_start + j) * 50 + i] = ~BlackImage[(Y_start + j) * 50 + i];
+    }
+  }
+#endif
 }
 
 void displayCalibrationWarning() {
@@ -650,7 +669,8 @@ void displayBattery(uint8_t percentage) {
       BlackImage[y+x*25] = ~BlackImage[y+x*25];
     }
   }
-#endif
+#endif /* EINK_1IN54V2 */
+
 #ifdef EINK_4IN2
   Paint_DrawRectangle(279, 10, 385, 37, BLACK, DOT_PIXEL_2X2, DRAW_FILL_EMPTY); //case
   Paint_DrawRectangle(385, 16, 390, 31, BLACK, DOT_PIXEL_2X2, DRAW_FILL_EMPTY); //nippel
@@ -670,15 +690,24 @@ void displayBattery(uint8_t percentage) {
 }
 
 void updateDisplay() {
+  if (invertDisplay) {
 #ifdef EINK_1IN54V2
-//#define invertDisplay
-#ifdef invertDisplay
-  for (int x = 0; x < 200; x++) {
-    for (int y = 0; y < 200/8; y++) {
-      BlackImage[y+x*25] = ~BlackImage[y+x*25];
+    for (int x = 0; x < 200; x++) {
+      for (int y = 0; y < 200/8; y++) {
+        BlackImage[y+x*25] = ~BlackImage[y+x*25];
+      }
     }
+#endif /* EINK_1IN54V2 */
+#ifdef EINK_4IN2
+    for (int j = 0; j < 300; j++) {
+      for (int i = 0; i < 400/8; i++) {
+        BlackImage[j * 50 + i] = ~BlackImage[j * 50 + i];
+      }
+    }
+#endif /* EINK_4IN2 */
   }
-#endif
+
+#ifdef EINK_1IN54V2
   if (comingFromDeepSleep && !BatteryMode) refreshes = 1;
   if (refreshes == 1) {
     // Full update
@@ -695,7 +724,8 @@ void updateDisplay() {
     EPD_1IN54_V2_DisplayPart(BlackImage);
   }
   EPD_1IN54_V2_Sleep();
-#endif
+#endif /* EINK_1IN54V2 */
+
 #ifdef EINK_4IN2
   if (refreshes == 1) {
     EPD_4IN2_Init_Fast();
@@ -706,6 +736,7 @@ void updateDisplay() {
   }
   EPD_4IN2_Sleep();
 #endif
+
   if (refreshes == 720) { // every hour or every six hours on battery
     refreshes = 0;        // force full update
   }
