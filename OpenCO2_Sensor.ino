@@ -87,6 +87,7 @@ RTC_DATA_ATTR bool useFahrenheit = false;
 RTC_DATA_ATTR int HWSubRev = 1; //default only
 RTC_DATA_ATTR float maxBatteryVoltage;
 RTC_DATA_ATTR bool useWiFi;
+RTC_DATA_ATTR bool english = false; //default only
 
 /* TEST_MODE */
 RTC_DATA_ATTR bool TEST_MODE = false;
@@ -219,6 +220,7 @@ void initOnce() {
   useSmoothLEDcolor = preferences.getBool("useSmoothLEDcolor", true);
   invertDisplay = preferences.getBool("invertDisplay", false);
   useFahrenheit = preferences.getBool("useFahrenheit", false);
+  english = preferences.getBool("english", false);
   preferences.end();
 
   scd4x.stopPeriodicMeasurement(); // stop potentially previously started measurement
@@ -590,13 +592,13 @@ enum LEDMenuOptions {
 enum DisplayMenuOptions {
   INVERT,
   TEMP_UNIT,
+  LANGUAGE,
   EXIT_DISPLAY,
   NUM_DISPLAY_OPTIONS
 };
 
-#define ENGLISH
-#ifdef ENGLISH
-const char* menuItems[NUM_OPTIONS] = {
+/* ENGLISH */
+const char* EnglishMenuItems[NUM_OPTIONS] = {
   "LED",
   "Display",
   "Calibrate",
@@ -605,20 +607,22 @@ const char* menuItems[NUM_OPTIONS] = {
   "Info",
   "Rainbow"//"Santa"
 };
-const char* LEDmenuItems[NUM_LED_OPTIONS] = {
+const char* EnglishLEDmenuItems[NUM_LED_OPTIONS] = {
   "Battery",
   "on USB",
   "Color",
   "Bright",
   "Exit"
 };
-const char* OptionsMenuItems[NUM_DISPLAY_OPTIONS] = {
+const char* EnglishOptionsMenuItems[NUM_DISPLAY_OPTIONS] = {
   "Invert",
   "Unit",
+  "English",
   "Exit"
 };
-#else
-const char* menuItems[NUM_OPTIONS] = {
+
+/* GERMAN */
+const char* GermanMenuItems[NUM_OPTIONS] = {
   "LED",
   "Display",
   "Kalibrieren",
@@ -627,19 +631,19 @@ const char* menuItems[NUM_OPTIONS] = {
   "Info",
   "Regenbogen"//"Weihnachten"
 };
-const char* LEDmenuItems[NUM_LED_OPTIONS] = {
+const char* GermanLEDmenuItems[NUM_LED_OPTIONS] = {
   "Batterie",
   "mit USB",
   "Farbe",
   "Hell",
   "Beenden"
 };
-const char* OptionsMenuItems[NUM_DISPLAY_OPTIONS] = {
+const char* GermanOptionsMenuItems[NUM_DISPLAY_OPTIONS] = {
   "Invert",
   "Einheit",
+  "German",
   "Beenden"
 };
-#endif
 
 bool buttonPressedAgain = false;
 void handleButtonPress() {
@@ -813,6 +817,12 @@ void OptionsMenu() {
             useFahrenheit = !useFahrenheit;
             preferences.begin("co2-sensor", false);
             preferences.putBool("useFahrenheit", useFahrenheit);
+            preferences.end(); 
+            break;
+          case LANGUAGE:
+            english = !english;
+            preferences.begin("co2-sensor", false);
+            preferences.putBool("english", english);
             preferences.end(); 
             break;
           case EXIT_DISPLAY:

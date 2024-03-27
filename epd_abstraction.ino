@@ -110,13 +110,13 @@ void displayLowBattery() {
   Paint_DrawRectangle( 50,  40, 150, 90, WHITE, DOT_PIXEL_3X3, DRAW_FILL_EMPTY);
   Paint_DrawRectangle(150,  55, 160, 75, WHITE, DOT_PIXEL_1X1, DRAW_FILL_FULL);
   Paint_DrawLine(      60, 100, 140, 30, WHITE, DOT_PIXEL_3X3, LINE_STYLE_SOLID);
-#ifdef ENGLISH
-  Paint_DrawString_EN(45, 120, "Charge", &Font20, BLACK, WHITE);
-  Paint_DrawString_EN(45, 145, "Battery", &Font20, BLACK, WHITE);
-#else
-  Paint_DrawString_EN(45, 120, "Batterie", &Font20, BLACK, WHITE);
-  Paint_DrawString_EN(45, 145, "aufladen", &Font20, BLACK, WHITE);
-#endif
+  if (english) {
+    Paint_DrawString_EN(45, 120, "Charge", &Font20, BLACK, WHITE);
+    Paint_DrawString_EN(45, 145, "Battery", &Font20, BLACK, WHITE);
+  } else {
+    Paint_DrawString_EN(45, 120, "Batterie", &Font20, BLACK, WHITE);
+    Paint_DrawString_EN(45, 145, "aufladen", &Font20, BLACK, WHITE);
+  }
 
 #ifdef EINK_1IN54V2
   EPD_1IN54_V2_Init();
@@ -240,17 +240,17 @@ void draw_qr_code(const uint8_t * qrcode) {
 
 void displayNoHistory() {
   Paint_Clear(WHITE);
-#ifdef ENGLISH
-  Paint_DrawString_EN(15, 52, "Disconnect", &Font24, WHITE, BLACK);
-  Paint_DrawString_EN(15, 76, " power to ", &Font24, WHITE, BLACK);
-  Paint_DrawString_EN(15, 100, "  record  ", &Font24, WHITE, BLACK);
-  Paint_DrawString_EN(15+8, 124, " History ", &Font24, WHITE, BLACK);
-#else
-  Paint_DrawString_EN(58, 52, "Strom", &Font24, WHITE, BLACK);
-  Paint_DrawString_EN(15-8, 76, "trennen, um", &Font24, WHITE, BLACK);
-  Paint_DrawString_EN(15-8, 100, "Historie zu", &Font24, WHITE, BLACK);
-  Paint_DrawString_EN(15+8, 124, "speichern", &Font24, WHITE, BLACK);
-#endif
+  if (english) {
+    Paint_DrawString_EN(15, 52, "Disconnect", &Font24, WHITE, BLACK);
+    Paint_DrawString_EN(15, 76, " power to ", &Font24, WHITE, BLACK);
+    Paint_DrawString_EN(15, 100, "  record  ", &Font24, WHITE, BLACK);
+    Paint_DrawString_EN(15+8, 124, " History ", &Font24, WHITE, BLACK);
+  } else {
+    Paint_DrawString_EN(58, 52, "Strom", &Font24, WHITE, BLACK);
+    Paint_DrawString_EN(15-8, 76, "trennen, um", &Font24, WHITE, BLACK);
+    Paint_DrawString_EN(15-8, 100, "Historie zu", &Font24, WHITE, BLACK);
+    Paint_DrawString_EN(15+8, 124, "speichern", &Font24, WHITE, BLACK);
+  }
   updateDisplay();
 }
 
@@ -276,42 +276,46 @@ void displayHistory(uint16_t measurements[24][120]) {
   else Paint_DrawNum(200-4*11, 200-16, qrcodeNumber+1, &Font16, BLACK, WHITE);
   Paint_DrawString_EN(200-3*11, 200-16, "/", &Font16, WHITE, BLACK);
   Paint_DrawNum(200-2*11, 200-16, hour+1, &Font16, BLACK, WHITE);
-#ifdef ENGLISH
-  Paint_DrawString_EN(1, 1, "Wait 20sec to exit", &Font16, WHITE, BLACK);
-#else
-  Paint_DrawString_EN(1, 1, "20 Sek. warten", &Font16, WHITE, BLACK);
-#endif
+  if (english) Paint_DrawString_EN(1, 1, "Wait 20sec to exit", &Font16, WHITE, BLACK);
+  else         Paint_DrawString_EN(1, 1, "20 Sek. warten", &Font16, WHITE, BLACK);
   updateDisplay();
 }
 
 void displayMenu(uint8_t selectedOption) {
+  const char* menuItem;
   Paint_Clear(WHITE);
   Paint_DrawString_EN(66, 0, "Menu", &Font24, WHITE, BLACK);
   Paint_DrawLine(10, 23, 190, 23, BLACK, DOT_PIXEL_1X1, LINE_STYLE_SOLID);
 
   for (int i=0; i<NUM_OPTIONS; i++) {
-    Paint_DrawString_EN(5, 25*(i+1), menuItems[i], &Font24, WHITE, BLACK);
+    if (english) menuItem = EnglishMenuItems[i];
+    else         menuItem = GermanMenuItems[i];
+    Paint_DrawString_EN(5, 25*(i+1), menuItem, &Font24, WHITE, BLACK);
   }
   invertSelected(selectedOption);
   updateDisplay();
 }
 
 void displayLEDMenu(uint8_t selectedOption) {
+  const char* LEDmenuItem;
   Paint_Clear(WHITE);
   Paint_DrawString_EN(75, 0, "LED", &Font24, WHITE, BLACK);
   Paint_DrawLine(10, 23, 190, 23, BLACK, DOT_PIXEL_1X1, LINE_STYLE_SOLID);
 
   for (int i=0; i<NUM_LED_OPTIONS; i++) {
-    Paint_DrawString_EN(5, 25*(i+1), LEDmenuItems[i], &Font24, WHITE, BLACK);
+    if (english) LEDmenuItem = EnglishLEDmenuItems[i];
+    else         LEDmenuItem = GermanLEDmenuItems[i];
+    Paint_DrawString_EN(5, 25*(i+1), LEDmenuItem, &Font24, WHITE, BLACK);
   }
 
-#ifdef ENGLISH
-  Paint_DrawString_EN(149, 25, (LEDonBattery? "ON":"OFF"), &Font24, WHITE, BLACK);
-  Paint_DrawString_EN(149, 50, (LEDonUSB? "ON":"OFF"), &Font24, WHITE, BLACK);
-#else
-  Paint_DrawString_EN(149, 25, (LEDonBattery? "AN":"AUS"), &Font24, WHITE, BLACK);
-  Paint_DrawString_EN(149, 50, (LEDonUSB? "AN":"AUS"), &Font24, WHITE, BLACK);
-#endif
+  if (english) {
+    Paint_DrawString_EN(149, 25, (LEDonBattery? "ON":"OFF"), &Font24, WHITE, BLACK);
+    Paint_DrawString_EN(149, 50, (LEDonUSB? "ON":"OFF"), &Font24, WHITE, BLACK);
+  } else {
+    Paint_DrawString_EN(149, 25, (LEDonBattery? "AN":"AUS"), &Font24, WHITE, BLACK);
+    Paint_DrawString_EN(149, 50, (LEDonUSB? "AN":"AUS"), &Font24, WHITE, BLACK);
+  }
+
   Paint_DrawString_EN(149, 75, (useSmoothLEDcolor? "1":"2"), &Font24, WHITE, BLACK);
   Paint_DrawString_EN(166, 75, "/2", &Font24, WHITE, BLACK);
   Paint_DrawNum(149, 100, (int32_t)(ledbrightness/20+1), &Font24, BLACK, WHITE); // 5 25 45 65 85
@@ -322,12 +326,15 @@ void displayLEDMenu(uint8_t selectedOption) {
 }
 
 void displayOptionsMenu(uint8_t selectedOption) {
+  const char* OptionsMenuItem;
   Paint_Clear(WHITE);
   Paint_DrawString_EN(40, 0, "DISPLAY", &Font24, WHITE, BLACK);
   Paint_DrawLine(10, 23, 190, 23, BLACK, DOT_PIXEL_1X1, LINE_STYLE_SOLID);
 
   for (int i=0; i<NUM_DISPLAY_OPTIONS; i++) {
-    Paint_DrawString_EN(5, 25*(i+1), OptionsMenuItems[i], &Font24, WHITE, BLACK);
+    if (english) OptionsMenuItem = EnglishOptionsMenuItems[i];
+    else         OptionsMenuItem = GermanOptionsMenuItems[i];
+    Paint_DrawString_EN(5, 25*(i+1), OptionsMenuItem, &Font24, WHITE, BLACK);
   }
   Paint_DrawString_EN(166, 50, (useFahrenheit? "*F":"*C"), &Font24, WHITE, BLACK);
   invertSelected(selectedOption);
@@ -365,17 +372,17 @@ void displayCalibrationWarning() {
   Paint_DrawLine( 100,  20, 165, 120, WHITE, DOT_PIXEL_3X3, LINE_STYLE_SOLID);
   Paint_DrawLine(  37, 120, 163, 120, WHITE, DOT_PIXEL_4X4, LINE_STYLE_SOLID);
 
-#ifdef ENGLISH 
-  Paint_DrawString_EN(16, 132, "Calibration!", &Font20, BLACK, WHITE);
-  Paint_DrawString_EN(1, 152, "Put Sensor outside", &Font16, BLACK, WHITE);
-  Paint_DrawString_EN(1, 168, "for 3+ minutes. Or", &Font16, BLACK, WHITE);
-  Paint_DrawString_EN(1, 184, "hold knob to stop", &Font16, BLACK, WHITE);
-#else
-  Paint_DrawString_EN(16, 132, "Kalibration!", &Font20, BLACK, WHITE);
-  Paint_DrawString_EN(1, 152, "Sensor fur 3+ min.", &Font16, BLACK, WHITE);
-  Paint_DrawString_EN(1, 168, "nach drausen legen", &Font16, BLACK, WHITE);
-  Paint_DrawString_EN(1, 184, "Knopf = abbrechen", &Font16, BLACK, WHITE);
-#endif
+  if (english) {
+    Paint_DrawString_EN(16, 132, "Calibration!", &Font20, BLACK, WHITE);
+    Paint_DrawString_EN(1, 152, "Put Sensor outside", &Font16, BLACK, WHITE);
+    Paint_DrawString_EN(1, 168, "for 3+ minutes. Or", &Font16, BLACK, WHITE);
+    Paint_DrawString_EN(1, 184, "hold knob to stop", &Font16, BLACK, WHITE);
+  } else {
+    Paint_DrawString_EN(16, 132, "Kalibration!", &Font20, BLACK, WHITE);
+    Paint_DrawString_EN(1, 152, "Sensor fur 3+ min.", &Font16, BLACK, WHITE);
+    Paint_DrawString_EN(1, 168, "nach drausen legen", &Font16, BLACK, WHITE);
+    Paint_DrawString_EN(1, 184, "Knopf = abbrechen", &Font16, BLACK, WHITE);
+  }
 
   updateDisplay();
 }
@@ -385,15 +392,15 @@ void displayWiFi(bool useWiFi) {
 
   if (useWiFi) {
     if (BatteryMode) {
-#ifdef ENGLISH
-      Paint_DrawString_EN(23, 52, "Wi-Fi: ON", &Font24, BLACK, WHITE);
-      Paint_DrawString_EN(40, 76, "Connect", &Font24, BLACK, WHITE);
-      Paint_DrawString_EN(48, 100, "Power!", &Font24, BLACK, WHITE);
-#else
-      Paint_DrawString_EN(32, 52, "WLAN: AN", &Font24, BLACK, WHITE);
-      Paint_DrawString_EN(57, 76, "Strom", &Font24, BLACK, WHITE);
-      Paint_DrawString_EN(15, 100, "verbinden!", &Font24, BLACK, WHITE);
-#endif
+      if (english) {
+        Paint_DrawString_EN(23, 52, "Wi-Fi: ON", &Font24, BLACK, WHITE);
+        Paint_DrawString_EN(40, 76, "Connect", &Font24, BLACK, WHITE);
+        Paint_DrawString_EN(48, 100, "Power!", &Font24, BLACK, WHITE);
+      } else {
+        Paint_DrawString_EN(32, 52, "WLAN: AN", &Font24, BLACK, WHITE);
+        Paint_DrawString_EN(57, 76, "Strom", &Font24, BLACK, WHITE);
+        Paint_DrawString_EN(15, 100, "verbinden!", &Font24, BLACK, WHITE);
+      }
     } else {
       invertedQR = true;
       if (WiFi.status() == WL_CONNECTED) {
@@ -430,11 +437,8 @@ void displayWiFi(bool useWiFi) {
     Paint_DrawCircle(100, 95,   4, WHITE, DOT_PIXEL_1X1, DRAW_FILL_FULL);
 
     Paint_DrawLine( 60, 90, 140, 10, WHITE, DOT_PIXEL_4X4, LINE_STYLE_SOLID);
-#ifdef ENGLISH
-    Paint_DrawString_EN(15, 132, "Wi-Fi: OFF", &Font24, BLACK, WHITE);
-#else
-    Paint_DrawString_EN(15, 132, "WLAN: AUS", &Font24, BLACK, WHITE);
-#endif
+    if (english) Paint_DrawString_EN(15, 132, "Wi-Fi: OFF", &Font24, BLACK, WHITE);
+    else         Paint_DrawString_EN(15, 132, "WLAN: AUS", &Font24, BLACK, WHITE);
   }
   updateDisplay();
 }
