@@ -6,6 +6,7 @@
 */
 
 /* Includes display */
+#include "epd_abstraction.h"
 #include "DEV_Config.h"
 #include "EPD.h"
 #include "GUI_Paint.h"
@@ -19,15 +20,241 @@
 
 RTC_DATA_ATTR int refreshes = 1;
 RTC_DATA_ATTR UBYTE *BlackImage;
-extern bool BatteryMode;
-extern bool comingFromDeepSleep;
+extern bool BatteryMode, comingFromDeepSleep;
 extern int HWSubRev;
 
-sFONT big=bahn_big; //gotham_big nothing_big bahn_big
-sFONT mid=bahn_mid; //gotham_mid nothing_mid bahn_mid
-sFONT sml=bahn_sml; //gotham_sml nothing_sml bahn_sml
+extern int font;
+sFONT fonts[3][3] = {
+  bahn_big, bahn_mid, bahn_sml,
+  gotham_big, gotham_mid, gotham_sml,
+  nothing_big, nothing_mid, bahn_sml
+};
+sFONT big=fonts[font][0];
+sFONT mid=fonts[font][1];
+sFONT sml=fonts[font][2];
+
+void changeFont(int font) {
+  big=fonts[font][0];
+  mid=fonts[font][1];
+  sml=fonts[font][2];
+}
+
+bool buttonPressedAgain = false;
+void handleButtonPress() {
+  uint8_t selectedOption = 0;
+  extern int refreshes;
+  refreshes = 1; // force full update
+  comingFromDeepSleep = false; // force display update even if CO2 changed by less than 3%
+  displayMenu(selectedOption);
+
+  uint16_t mspressed;
+  unsigned long menuStartTime = millis();
+
+  for (;;) { 
+    if ((millis() - menuStartTime) > 20000) { // display Menu up to 20 sec
+      refreshes = 1;
+      return;
+    }
+
+    mspressed = 0;
+    if (digitalRead(BUTTON) == 0) {
+      while(digitalRead(BUTTON) == 0) { // calculate how long BUTTON is pressed
+        delay(100);
+        mspressed += 100;
+        if (mspressed > 1000) break;
+      }
+      if (mspressed > 1000) { // long press
+        switch (selectedOption) {
+          case LED:
+            LEDMenu();
+            refreshes = 1;
+            return;
+          case DISPLAY_MENU:
+            OptionsMenu();
+            refreshes = 1;
+            return;
+          case CALIBRATE:
+            calibrate();
+            refreshes = 1;
+            return;
+          case HISTORY:
+            history();
+            refreshes = 1;
+            return;
+          case WLAN:
+            toggleWiFi();
+            refreshes = 1;
+            return;
+          case INFO:
+            displayinfo();
+            while (digitalRead(BUTTON) != 0) delay(100); // wait for button press
+            refreshes = 1;
+            return;
+          case RAINBOW:
+            rainbowMode();
+            setLED(co2);
+            refreshes = 1;
+            return;
+        }
+      } else { // goto next Menu point
+        buttonPressedAgain = true; // display at least once
+        while (buttonPressedAgain) {
+          buttonPressedAgain = false;
+          selectedOption++;
+          selectedOption %= NUM_OPTIONS;
+          attachInterrupt(digitalPinToInterrupt(BUTTON), buttonInterrupt, FALLING);
+          displayMenu(selectedOption);
+          detachInterrupt(digitalPinToInterrupt(BUTTON));
+          menuStartTime = millis(); // display Menu again for 20 sec
+          if (digitalRead(BUTTON) == 0) break; // long press detected
+        }
+      }
+    }
+  }
+}
+
+void buttonInterrupt() {
+  buttonPressedAgain = true;
+}
+
+void LEDMenu() {
+  uint8_t selectedOption = 0;
+  displayLEDMenu(selectedOption);
+  uint16_t mspressed;
+  unsigned long menuStartTime = millis();
+
+  for (;;) { 
+    if ((millis() - menuStartTime) > 20000) return; // display LED Menu up to 20 sec
+    mspressed = 0;
+    if (digitalRead(BUTTON) == 0) {
+      while(digitalRead(BUTTON) == 0) { // calculate how long BUTTON is pressed
+        delay(100);
+        mspressed += 100;
+        if (mspressed > 1000) break;
+      }
+      if (mspressed > 1000) { // long press
+        switch (selectedOption) {
+          case onBATTERY:
+            LEDonBattery = !LEDonBattery;
+            preferences.begin("co2-sensor", false);
+            preferences.putBool("LEDonBattery", LEDonBattery);
+            preferences.end();
+            break;
+          case onUSB:
+            LEDonUSB = !LEDonUSB;
+            preferences.begin("co2-sensor", false);
+            preferences.putBool("LEDonUSB", LEDonUSB);
+            preferences.end();
+            break;
+          case COLOR:
+            useSmoothLEDcolor = !useSmoothLEDcolor;
+            preferences.begin("co2-sensor", false);
+            preferences.putBool("useSmoothLEDcolor", useSmoothLEDcolor);
+            preferences.end();
+            break;
+          case BRIGHTNESS:
+            ledbrightness += 20; // 5 25 45 65 85
+            ledbrightness %= 100;
+            preferences.begin("co2-sensor", false);
+            preferences.putInt("ledbrightness", ledbrightness);
+            preferences.end();
+            break;
+          case EXIT_LED:
+            while(digitalRead(BUTTON) == 0) {} // wait until button is released
+            return;
+        }
+        setLED(co2);
+        displayLEDMenu(selectedOption);
+        menuStartTime = millis(); // display LED Menu again for 20 sec
+      } else { // goto next Menu point
+        buttonPressedAgain = true; // display at least once
+        while (buttonPressedAgain) {
+          buttonPressedAgain = false;
+          selectedOption++;
+          selectedOption %= NUM_LED_OPTIONS;
+          attachInterrupt(digitalPinToInterrupt(BUTTON), buttonInterrupt, FALLING);
+          displayLEDMenu(selectedOption);
+          detachInterrupt(digitalPinToInterrupt(BUTTON));
+          menuStartTime = millis(); // display LED Menu again for 20 sec
+          if (digitalRead(BUTTON) == 0) break; // long press detected
+        }
+      }
+    }
+  }
+}
+
+void OptionsMenu() {  
+  uint8_t selectedOption = 0;
+  displayOptionsMenu(selectedOption);
+
+  uint16_t mspressed;
+  unsigned long menuStartTime = millis();
+
+  for (;;) { 
+    if ((millis() - menuStartTime) > 20000) return; // display up to 20 sec
+    mspressed = 0;
+    if (digitalRead(BUTTON) == 0) {
+      while(digitalRead(BUTTON) == 0) { // calculate how long BUTTON is pressed
+        delay(100);
+        mspressed += 100;
+        if (mspressed > 1000) break;
+      }
+      if (mspressed > 1000) { // long press
+        switch (selectedOption) {
+          case INVERT:
+            invertDisplay = !invertDisplay;
+            preferences.begin("co2-sensor", false);
+            preferences.putBool("invertDisplay", invertDisplay);
+            preferences.end();
+            break;
+          case TEMP_UNIT:
+            useFahrenheit = !useFahrenheit;
+            preferences.begin("co2-sensor", false);
+            preferences.putBool("useFahrenheit", useFahrenheit);
+            preferences.end(); 
+            break;
+          case LANGUAGE:
+            english = !english;
+            preferences.begin("co2-sensor", false);
+            preferences.putBool("english", english);
+            preferences.end(); 
+            break;
+          case FONT:
+            font += 1;
+            font %= 3;
+            changeFont(font);
+            preferences.begin("co2-sensor", false);
+            preferences.putInt("font", font);
+            preferences.end();
+            break;
+          case EXIT_DISPLAY:
+            while(digitalRead(BUTTON) == 0) {} // wait until button is released
+            return;
+        }
+        displayOptionsMenu(selectedOption);
+        menuStartTime = millis(); // display again for 20 sec
+      } else { // goto next Menu point
+        buttonPressedAgain = true; // display at least once
+        while (buttonPressedAgain) {
+          buttonPressedAgain = false;
+          selectedOption++;
+          selectedOption %= NUM_DISPLAY_OPTIONS;
+          attachInterrupt(digitalPinToInterrupt(BUTTON), buttonInterrupt, FALLING);
+          displayOptionsMenu(selectedOption);
+          detachInterrupt(digitalPinToInterrupt(BUTTON));
+          menuStartTime = millis(); // display again for 20 sec
+          if (digitalRead(BUTTON) == 0) break; // long press detected
+        }
+      }
+    }
+  }
+}
 
 void displayWelcome() {
+  EEPROM.begin(2); // EEPROM_SIZE
+  EEPROM.write(0, 1);
+  EEPROM.commit();
+
   initEpdOnce();
 #ifdef EINK_1IN54V2
   Paint_DrawBitMap(gImage_welcome);
@@ -39,9 +266,6 @@ void displayWelcome() {
   EPD_4IN2_Display(BlackImage);
   EPD_4IN2_Sleep();
 #endif*/
-  EEPROM.begin(2); // EEPROM_SIZE
-  EEPROM.write(0, 1);
-  EEPROM.commit();
 
   esp_sleep_pd_config(ESP_PD_DOMAIN_RTC_PERIPH, ESP_PD_OPTION_OFF);     // RTC IO, sensors and ULP co-processor
   esp_sleep_pd_config(ESP_PD_DOMAIN_RTC_SLOW_MEM, ESP_PD_OPTION_OFF);   // RTC slow memory: auto
@@ -149,7 +373,7 @@ void displayWriteMeasuerments(uint16_t co2, float temperature, float humidity) {
     int offset = 0;
     if (temperature >= 100) offset = 29; // for Fahrenheit
 
-    Paint_DrawString_EN(60+offset, 4, useFahrenheit? "*F" : "*C", &sml, WHITE, BLACK);
+    Paint_DrawString_EN(60+offset, 4, useFahrenheit? "*F" : "*C", &bahn_sml, WHITE, BLACK);
     Paint_DrawString_EN(60+offset, 32, ",", &sml, WHITE, BLACK);
     char decimal[4];
     sprintf(decimal, "%d", ((int)(temperature * 10)) % 10);
@@ -157,7 +381,7 @@ void displayWriteMeasuerments(uint16_t co2, float temperature, float humidity) {
 
     /* humidity */
     Paint_DrawNum(124, 5, humidity, &mid, BLACK, WHITE);
-    Paint_DrawString_EN(184, 5, "%", &sml, WHITE, BLACK);
+    Paint_DrawString_EN(184, 5, "%", &bahn_sml, WHITE, BLACK);
 #endif /* EINK_1IN54V2 */
 
 #ifdef EINK_4IN2
@@ -198,7 +422,7 @@ void displayWriteMeasuerments(uint16_t co2, float temperature, float humidity) {
 
     /* humidity */
     Paint_DrawNum(240, 220, humidity, &big, BLACK, WHITE);
-    Paint_DrawString_EN(340, 220, "%", &sml, WHITE, BLACK);
+    Paint_DrawString_EN(340, 220, "%", &bahn_sml, WHITE, BLACK);
 #endif
 }
 
@@ -337,6 +561,9 @@ void displayOptionsMenu(uint8_t selectedOption) {
     Paint_DrawString_EN(5, 25*(i+1), OptionsMenuItem, &Font24, WHITE, BLACK);
   }
   Paint_DrawString_EN(166, 50, (useFahrenheit? "*F":"*C"), &Font24, WHITE, BLACK);
+  Paint_DrawNum(149, 100, (int32_t)(font+1), &Font24, BLACK, WHITE);
+  Paint_DrawString_EN(166, 100, "/3", &Font24, WHITE, BLACK);
+
   invertSelected(selectedOption);
   updateDisplay();
 }
@@ -358,6 +585,42 @@ void invertSelected(uint8_t selectedOption) {
     }
   }
 #endif
+}
+
+void displayFlappyBird() {
+  int birdpos = 100;
+#define numObsticals 5
+  int obsticals[numObsticals] = {100,90,110,110,100};
+  int frame = 0;
+  int xpos;
+  
+  if (comingFromDeepSleep && HWSubRev > 1) {
+    Paint_Clear(WHITE);
+    EPD_1IN54_V2_Init_Partial_After_Powerdown();
+    EPD_1IN54_V2_writePrevImage(BlackImage);
+  } else {
+    EPD_1IN54_V2_Init_Partial();
+  }
+
+  while (birdpos > 0 && birdpos < 200) {
+    Paint_Clear(WHITE);
+
+    if (digitalRead(BUTTON) == 0) birdpos -= 10;
+    else                          birdpos += 10;
+    Paint_DrawString_EN(20, birdpos, "X", &Font24, WHITE, BLACK);
+
+    for (int i = 0; i < numObsticals; i++) {
+      xpos =  (i+1)*40 - frame*3;
+               // Xstart,Ystart,Xend,Yend
+      Paint_DrawLine(xpos, 0, xpos, obsticals[i], BLACK, DOT_PIXEL_4X4, LINE_STYLE_SOLID); //top
+      Paint_DrawLine(xpos, 200, xpos, obsticals[i]+50, BLACK, DOT_PIXEL_4X4, LINE_STYLE_SOLID); //buttum
+    }
+    frame++;
+    frame %= 200;
+
+    Paint_DrawNum(200-7*3, 200-12, frame, &Font12, BLACK, WHITE);
+    EPD_1IN54_V2_DisplayPart(BlackImage);
+  }
 }
 
 void displayCalibrationWarning() {
@@ -665,7 +928,7 @@ void displayBattery(uint8_t percentage) {
   Paint_DrawRectangle( 1, 143, 92, 178, BLACK, DOT_PIXEL_2X2, DRAW_FILL_EMPTY); //case
   Paint_DrawRectangle(92, 151, 97, 170, BLACK, DOT_PIXEL_2X2, DRAW_FILL_EMPTY); //nippel
   //Paint_DrawRectangle( 1, 143, 91*(percentage/100.0)+1, 178, BLACK, DOT_PIXEL_1X1, DRAW_FILL_FULL);
-  Paint_DrawString_EN(20,149, batterpercent, &sml, WHITE, BLACK);
+  Paint_DrawString_EN(20,149, batterpercent, &bahn_sml, WHITE, BLACK);
 
   /* invert the filled part of the Battery */
   for (int x = (200-(90*(percentage/100.0))); x < (200-2); x++) {
@@ -678,7 +941,7 @@ void displayBattery(uint8_t percentage) {
 #ifdef EINK_4IN2
   Paint_DrawRectangle(279, 10, 385, 37, BLACK, DOT_PIXEL_2X2, DRAW_FILL_EMPTY); //case
   Paint_DrawRectangle(385, 16, 390, 31, BLACK, DOT_PIXEL_2X2, DRAW_FILL_EMPTY); //nippel
-  Paint_DrawString_EN(300, 12, batterpercent, &sml, WHITE, BLACK);
+  Paint_DrawString_EN(300, 12, batterpercent, &bahn_sml, WHITE, BLACK);
 
   /* invert the filled part of the Battery */
   int X_start=280;

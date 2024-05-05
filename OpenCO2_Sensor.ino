@@ -7,7 +7,7 @@
    - Sensirion I2C SCD4x: https://github.com/Sensirion/arduino-i2c-scd4x
    - WiFiManager: https://github.com/tzapu/WiFiManager
 */
-#define VERSION "v4.4"
+#define VERSION "v4.5"
 
 /* Includes display */
 #include "DEV_Config.h"
@@ -74,31 +74,17 @@ SensirionI2CScd4x scd4x;
 #endif
 #include "USB.h"
 
-RTC_DATA_ATTR bool USB_ACTIVE = false;
-RTC_DATA_ATTR bool initDone = false;
-RTC_DATA_ATTR bool BatteryMode = false;
-RTC_DATA_ATTR bool comingFromDeepSleep = false;
-RTC_DATA_ATTR int ledbrightness = 5;
-RTC_DATA_ATTR bool LEDonBattery = false;
-RTC_DATA_ATTR bool LEDonUSB = true;
-RTC_DATA_ATTR bool useSmoothLEDcolor = true;
-RTC_DATA_ATTR bool invertDisplay = false;
-RTC_DATA_ATTR bool useFahrenheit = false;
-RTC_DATA_ATTR int HWSubRev = 1; //default only
+RTC_DATA_ATTR bool USB_ACTIVE = false, initDone = false, BatteryMode = false, comingFromDeepSleep = false;
+RTC_DATA_ATTR bool LEDonBattery, LEDonUSB, useSmoothLEDcolor, invertDisplay, useFahrenheit, useWiFi, english;
+RTC_DATA_ATTR int ledbrightness, HWSubRev, font;
 RTC_DATA_ATTR float maxBatteryVoltage;
-RTC_DATA_ATTR bool useWiFi;
-RTC_DATA_ATTR bool english = false; //default only
 
 /* TEST_MODE */
-RTC_DATA_ATTR bool TEST_MODE = false;
-RTC_DATA_ATTR uint16_t sensorStatus;
-RTC_DATA_ATTR uint16_t serial0;
-RTC_DATA_ATTR uint16_t serial1;
-RTC_DATA_ATTR uint16_t serial2;
+RTC_DATA_ATTR bool TEST_MODE;
+RTC_DATA_ATTR uint16_t sensorStatus, serial0, serial1, serial2;
 
 RTC_DATA_ATTR uint16_t co2 = 400;
-RTC_DATA_ATTR float temperature = 0.0f;
-RTC_DATA_ATTR float humidity = 0.0f;
+RTC_DATA_ATTR float temperature = 0.0f, humidity = 0.0f;
 
 /* WIFI */
 bool shouldSaveConfig = false;
@@ -217,6 +203,8 @@ void initOnce() {
   LEDonBattery = preferences.getBool("LEDonBattery", false);
   LEDonUSB = preferences.getBool("LEDonUSB", true);
   ledbrightness = preferences.getInt("ledbrightness", 5);
+  font = preferences.getInt("font", 0);
+  changeFont(font);
   useSmoothLEDcolor = preferences.getBool("useSmoothLEDcolor", true);
   invertDisplay = preferences.getBool("invertDisplay", false);
   useFahrenheit = preferences.getBool("useFahrenheit", false);
@@ -567,283 +555,6 @@ void toggleWiFi() {
     if (BatteryMode && (digitalRead(USB_PRESENT) == HIGH)) { // power got connected
       BatteryMode = false;
       handleWiFiChange();
-    }
-  }
-}
-
-enum MenuOptions {
-  LED,
-  DISPLAY_MENU,
-  CALIBRATE,
-  HISTORY,
-  WLAN,
-  INFO,
-  RAINBOW,
-  NUM_OPTIONS
-};
-enum LEDMenuOptions {
-  onBATTERY,
-  onUSB,
-  COLOR,
-  BRIGHTNESS,
-  EXIT_LED,
-  NUM_LED_OPTIONS
-};
-enum DisplayMenuOptions {
-  INVERT,
-  TEMP_UNIT,
-  LANGUAGE,
-  EXIT_DISPLAY,
-  NUM_DISPLAY_OPTIONS
-};
-
-/* ENGLISH */
-const char* EnglishMenuItems[NUM_OPTIONS] = {
-  "LED",
-  "Display",
-  "Calibrate",
-  "History",
-  "Wi-Fi",
-  "Info",
-  "Rainbow"//"Santa"
-};
-const char* EnglishLEDmenuItems[NUM_LED_OPTIONS] = {
-  "Battery",
-  "on USB",
-  "Color",
-  "Bright",
-  "Exit"
-};
-const char* EnglishOptionsMenuItems[NUM_DISPLAY_OPTIONS] = {
-  "Invert",
-  "Unit",
-  "English",
-  "Exit"
-};
-
-/* GERMAN */
-const char* GermanMenuItems[NUM_OPTIONS] = {
-  "LED",
-  "Display",
-  "Kalibrieren",
-  "Historie",
-  "WLAN",
-  "Info",
-  "Regenbogen"//"Weihnachten"
-};
-const char* GermanLEDmenuItems[NUM_LED_OPTIONS] = {
-  "Batterie",
-  "mit USB",
-  "Farbe",
-  "Hell",
-  "Beenden"
-};
-const char* GermanOptionsMenuItems[NUM_DISPLAY_OPTIONS] = {
-  "Invert",
-  "Einheit",
-  "German",
-  "Beenden"
-};
-
-bool buttonPressedAgain = false;
-void handleButtonPress() {
-  uint8_t selectedOption = 0;
-  extern int refreshes;
-  refreshes = 1; // force full update
-  comingFromDeepSleep = false; // force display update even if CO2 changed by less than 3%
-  displayMenu(selectedOption);
-
-  uint16_t mspressed;
-  unsigned long menuStartTime = millis();
-
-  for (;;) { 
-    if ((millis() - menuStartTime) > 20000) { // display Menu up to 20 sec
-      refreshes = 1;
-      return;
-    }
-
-    mspressed = 0;
-    if (digitalRead(BUTTON) == 0) {
-      while(digitalRead(BUTTON) == 0) { // calculate how long BUTTON is pressed
-        delay(100);
-        mspressed += 100;
-        if (mspressed > 1000) break;
-      }
-      if (mspressed > 1000) { // long press
-        switch (selectedOption) {
-          case LED:
-            LEDMenu();
-            refreshes = 1;
-            return;
-          case DISPLAY_MENU:
-            OptionsMenu();
-            refreshes = 1;
-            return;
-          case CALIBRATE:
-            calibrate();
-            refreshes = 1;
-            return;
-          case HISTORY:
-            history();
-            refreshes = 1;
-            return;
-          case WLAN:
-            toggleWiFi();
-            refreshes = 1;
-            return;
-          case INFO:
-            displayinfo();
-            while (digitalRead(BUTTON) != 0) delay(100); // wait for button press
-            refreshes = 1;
-            return;
-          case RAINBOW:
-            rainbowMode();
-            setLED(co2);
-            refreshes = 1;
-            return;
-        }
-      } else { // goto next Menu point
-        buttonPressedAgain = true; // display at least once
-        while (buttonPressedAgain) {
-          buttonPressedAgain = false;
-          selectedOption++;
-          selectedOption %= NUM_OPTIONS;
-          attachInterrupt(digitalPinToInterrupt(BUTTON), buttonInterrupt, FALLING);
-          displayMenu(selectedOption);
-          detachInterrupt(digitalPinToInterrupt(BUTTON));
-          menuStartTime = millis(); // display Menu again for 20 sec
-          if (digitalRead(BUTTON) == 0) break; // long press detected
-        }
-      }
-    }
-  }
-}
-
-void buttonInterrupt() {
-  buttonPressedAgain = true;
-}
-
-void LEDMenu() {
-  uint8_t selectedOption = 0;
-  displayLEDMenu(selectedOption);
-  uint16_t mspressed;
-  unsigned long menuStartTime = millis();
-
-  for (;;) { 
-    if ((millis() - menuStartTime) > 20000) return; // display LED Menu up to 20 sec
-    mspressed = 0;
-    if (digitalRead(BUTTON) == 0) {
-      while(digitalRead(BUTTON) == 0) { // calculate how long BUTTON is pressed
-        delay(100);
-        mspressed += 100;
-        if (mspressed > 1000) break;
-      }
-      if (mspressed > 1000) { // long press
-        switch (selectedOption) {
-          case onBATTERY:
-            LEDonBattery = !LEDonBattery;
-            preferences.begin("co2-sensor", false);
-            preferences.putBool("LEDonBattery", LEDonBattery);
-            preferences.end();
-            break;
-          case onUSB:
-            LEDonUSB = !LEDonUSB;
-            preferences.begin("co2-sensor", false);
-            preferences.putBool("LEDonUSB", LEDonUSB);
-            preferences.end();
-            break;
-          case COLOR:
-            useSmoothLEDcolor = !useSmoothLEDcolor;
-            preferences.begin("co2-sensor", false);
-            preferences.putBool("useSmoothLEDcolor", useSmoothLEDcolor);
-            preferences.end();
-            break;
-          case BRIGHTNESS:
-            ledbrightness += 20; // 5 25 45 65 85
-            ledbrightness %= 100;
-            preferences.begin("co2-sensor", false);
-            preferences.putInt("ledbrightness", ledbrightness);
-            preferences.end();
-            break;
-          case EXIT_LED:
-            while(digitalRead(BUTTON) == 0) {} // wait until button is released
-            return;
-        }
-        setLED(co2);
-        displayLEDMenu(selectedOption);
-        menuStartTime = millis(); // display LED Menu again for 20 sec
-      } else { // goto next Menu point
-        buttonPressedAgain = true; // display at least once
-        while (buttonPressedAgain) {
-          buttonPressedAgain = false;
-          selectedOption++;
-          selectedOption %= NUM_LED_OPTIONS;
-          attachInterrupt(digitalPinToInterrupt(BUTTON), buttonInterrupt, FALLING);
-          displayLEDMenu(selectedOption);
-          detachInterrupt(digitalPinToInterrupt(BUTTON));
-          menuStartTime = millis(); // display LED Menu again for 20 sec
-          if (digitalRead(BUTTON) == 0) break; // long press detected
-        }
-      }
-    }
-  }
-}
-
-void OptionsMenu() {  
-  uint8_t selectedOption = 0;
-  displayOptionsMenu(selectedOption);
-
-  uint16_t mspressed;
-  unsigned long menuStartTime = millis();
-
-  for (;;) { 
-    if ((millis() - menuStartTime) > 20000) return; // display up to 20 sec
-    mspressed = 0;
-    if (digitalRead(BUTTON) == 0) {
-      while(digitalRead(BUTTON) == 0) { // calculate how long BUTTON is pressed
-        delay(100);
-        mspressed += 100;
-        if (mspressed > 1000) break;
-      }
-      if (mspressed > 1000) { // long press
-        switch (selectedOption) {
-          case INVERT:
-            invertDisplay = !invertDisplay;
-            preferences.begin("co2-sensor", false);
-            preferences.putBool("invertDisplay", invertDisplay);
-            preferences.end();
-            break;
-          case TEMP_UNIT:
-            useFahrenheit = !useFahrenheit;
-            preferences.begin("co2-sensor", false);
-            preferences.putBool("useFahrenheit", useFahrenheit);
-            preferences.end(); 
-            break;
-          case LANGUAGE:
-            english = !english;
-            preferences.begin("co2-sensor", false);
-            preferences.putBool("english", english);
-            preferences.end(); 
-            break;
-          case EXIT_DISPLAY:
-            while(digitalRead(BUTTON) == 0) {} // wait until button is released
-            return;
-        }
-        displayOptionsMenu(selectedOption);
-        menuStartTime = millis(); // display again for 20 sec
-      } else { // goto next Menu point
-        buttonPressedAgain = true; // display at least once
-        while (buttonPressedAgain) {
-          buttonPressedAgain = false;
-          selectedOption++;
-          selectedOption %= NUM_DISPLAY_OPTIONS;
-          attachInterrupt(digitalPinToInterrupt(BUTTON), buttonInterrupt, FALLING);
-          displayOptionsMenu(selectedOption);
-          detachInterrupt(digitalPinToInterrupt(BUTTON));
-          menuStartTime = millis(); // display again for 20 sec
-          if (digitalRead(BUTTON) == 0) break; // long press detected
-        }
-      }
     }
   }
 }
