@@ -13,6 +13,7 @@
 #define VERSION "v4.5"
 
 #define HEIGHT_ABOVE_SEA_LEVEL 50 // Berlin
+#define TZ_DATA "CET-1CEST,M3.5.0,M10.5.0/3" // Europe/Berlin time zone from https://github.com/nayarsystems/posix_tz_db/blob/master/zones.csv
 
 /* Includes display */
 #include "DEV_Config.h"
@@ -601,7 +602,7 @@ void startWiFi() {
 #endif /* airgradient */
 
   configTime(0, 0, "pool.ntp.org");
-  setenv("TZ", "CET-1CEST,M3.5.0,M10.5.0/3", 1); // Europe/Berlin time zone from https://github.com/nayarsystems/posix_tz_db/blob/master/zones.csv
+  setenv("TZ", TZ_DATA, 1);
   tzset();
 }
 
