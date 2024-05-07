@@ -1,13 +1,19 @@
 /*
-   ESP32S2 Dev Module
+   OpenCO2 Sensor using ESP32 and SCD4x
+
+   Arduino board: ESP32S2 Dev Module
    Required Arduino libraries:
    - esp32 waveshare epd
    - Adafruit DotStar
    - Sensirion Core
    - Sensirion I2C SCD4x: https://github.com/Sensirion/arduino-i2c-scd4x
    - WiFiManager: https://github.com/tzapu/WiFiManager
+   - ArduinoMqttClient (if MQTT is defined)
 */
 #define VERSION "v4.5"
+
+#define HEIGHT_ABOVE_SEA_LEVEL 50 // Berlin
+#define TZ_DATA "CET-1CEST,M3.5.0,M10.5.0/3" // Europe/Berlin time zone from https://github.com/nayarsystems/posix_tz_db/blob/master/zones.csv
 
 /* Includes display */
 #include "DEV_Config.h"
@@ -37,11 +43,11 @@ const int port = 9925;
 WebServer server(port);
 #endif /* airgradient */
 
-//#define MQTT
+// #define MQTT
 #ifdef MQTT
 #ifdef airgradient
 #error only activate one: MQTT or airgradient
-#endif /*airgradient*/
+#endif /* airgradient */
 #include <ArduinoMqttClient.h>
 WiFiClient wifiClient;
 MqttClient mqttClient(wifiClient);
@@ -70,7 +76,7 @@ SensirionI2CScd4x scd4x;
 #ifndef ARDUINO_USB_MODE
 #error This ESP32 SoC has no Native USB interface
 #elif ARDUINO_USB_MODE == 1
-#error This sketch should be used when USB is in OTG mode and MSC On Boot enabeled
+#error This sketch should be used when USB is in OTG mode and MSC On Boot enabled
 #endif
 #include "USB.h"
 
@@ -176,23 +182,23 @@ void initOnce() {
   if (welcomeDone != 1) TEST_MODE = true;
 
   if (TEST_MODE) {
-    EEPROM.write(0, 0); //reset welcome
-    EEPROM.write(1, 2); //write HWSubRev 2
+    EEPROM.write(0, 0); // reset welcome
+    EEPROM.write(1, 2); // write HWSubRev 2
     EEPROM.commit();
     preferences.begin("co2-sensor", false); 
-    preferences.putFloat("MBV", 3.95); //default maxBatteryVoltage
+    preferences.putFloat("MBV", 3.95); // default maxBatteryVoltage
     preferences.end();
 
-    digitalWrite(LED_POWER, LOW); //LED on
+    digitalWrite(LED_POWER, LOW); // LED on
     strip.begin();
-    strip.setPixelColor(0, 5, 5, 5); //index, green, red, blue
+    strip.setPixelColor(0, 5, 5, 5); // index, green, red, blue
     strip.show();
 
     displayInitTestMode();
 
     scd4x.stopPeriodicMeasurement();
-    //scd4x.performFactoryReset();
-    //delay(100);
+    // scd4x.performFactoryReset();
+    // delay(100);
     scd4x.performSelfTest(sensorStatus);
   }
 
@@ -213,7 +219,7 @@ void initOnce() {
 
   scd4x.stopPeriodicMeasurement(); // stop potentially previously started measurement
   scd4x.getSerialNumber(serial0, serial1, serial2);
-  scd4x.setSensorAltitude(50);     // Berlin: 50m über NN
+  scd4x.setSensorAltitude(HEIGHT_ABOVE_SEA_LEVEL);
   scd4x.setAutomaticSelfCalibration(1);
   scd4x.setTemperatureOffset(getTempOffset());
   scd4x.startPeriodicMeasurement();
@@ -232,7 +238,7 @@ void setLED(uint16_t co2) {
     strip.show();
     return;
   }
-  digitalWrite(LED_POWER, LOW); //LED ON
+  digitalWrite(LED_POWER, LOW); // LED ON
   delay(10);
 
   int red = 0, green = 0, blue = 0;
@@ -389,7 +395,7 @@ float readBatteryVoltage() {
   if ((voltage > maxBatteryVoltage) && (voltage < 4.2) && (digitalRead(USB_PRESENT) == LOW)) {
      maxBatteryVoltage = voltage;
      preferences.begin("co2-sensor", false);
-     preferences.putFloat("MBV", voltage); //save maxBatteryVoltage
+     preferences.putFloat("MBV", voltage); // save maxBatteryVoltage
      preferences.end();
   }
   return voltage;
@@ -427,8 +433,8 @@ void calibrate() {
 
 #include "pictures.h"
 void rainbowMode() {
-  displayImage(gImage_rainbow); //  gImage_santa
-  digitalWrite(LED_POWER, LOW); //LED ON
+  displayImage(gImage_rainbow); // gImage_santa
+  digitalWrite(LED_POWER, LOW); // LED ON
 
   // Santa
   /*for(int j = 0; j < 256; j++) {
@@ -493,7 +499,7 @@ void saveMeasurement(uint16_t co2) {
 
 uint8_t qrcodeNumber = 0;
 void history() {
-  //DEMO DATA:
+  // DEMO DATA:
   /*hour = 2;
   for (int i=0; i<120; i++) {
     measurements[0][i] = 400+i;
@@ -575,7 +581,7 @@ void startWiFi() {
 
   char Hostname[28];
   snprintf(Hostname, 28, "OpenCO2-Sensor%llX", ESP.getEfuseMac());
-  WiFi.setHostname(Hostname); // hostname when conneced to home network
+  WiFi.setHostname(Hostname); // hostname when connected to home network
 
   wifiManager.setConfigPortalBlocking(false);
   wifiManager.autoConnect("OpenCO2 Sensor");  // name of broadcasted SSID  
@@ -596,7 +602,7 @@ void startWiFi() {
 #endif /* airgradient */
 
   configTime(0, 0, "pool.ntp.org");
-  setenv("TZ", "CET-1CEST,M3.5.0,M10.5.0/3", 1); // Europe/Berlin time zone from https://github.com/nayarsystems/posix_tz_db/blob/master/zones.csv
+  setenv("TZ", TZ_DATA, 1);
   tzset();
 }
 
@@ -620,7 +626,7 @@ void setup() {
   DEV_Module_Init();
 
   /* scd4x */
-  Wire.begin(33, 34); // grün, gelb
+  Wire.begin(33, 34); // green, yellow
   scd4x.begin(Wire);
 
   USB.onEvent(usbEventCallback);
@@ -677,7 +683,7 @@ void loop() {
     return; // otherwise continues running!
   }
 
-  // Read co2 Measurement
+  // Read co2 measurement
   uint16_t new_co2 = 400;
   float new_temperature = 0.0f;
   uint16_t error = scd4x.readMeasurement(new_co2, new_temperature, humidity);
@@ -687,7 +693,7 @@ void loop() {
     displayWriteError(errorMessage);
   } else {
     if (BatteryMode) saveMeasurement(new_co2);
-    /* dont update in Battery mode, unless CO2 has changed by 3% or temperature by 0.5°C */
+    /* don't update in Battery mode, unless CO2 has changed by 3% or temperature by 0.5°C */
     if (!TEST_MODE && BatteryMode && comingFromDeepSleep) {
       if ((abs(new_co2 - co2) < (0.03*co2)) && (fabs(new_temperature - temperature) < 0.5)) {
         goto_deep_sleep(30000);
