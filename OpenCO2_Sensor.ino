@@ -73,7 +73,7 @@ SensirionI2CScd4x scd4x;
 #ifndef ARDUINO_USB_MODE
 #error This ESP32 SoC has no Native USB interface
 #elif ARDUINO_USB_MODE == 1
-#error This sketch should be used when USB is in OTG mode and MSC On Boot enabeled
+#error This sketch should be used when USB is in OTG mode and MSC On Boot enabled
 #endif
 #include "USB.h"
 
@@ -216,7 +216,7 @@ void initOnce() {
 
   scd4x.stopPeriodicMeasurement(); // stop potentially previously started measurement
   scd4x.getSerialNumber(serial0, serial1, serial2);
-  scd4x.setSensorAltitude(50);     // Berlin: 50m über NN
+  scd4x.setSensorAltitude(50);     // Berlin: 50m above sea level
   scd4x.setAutomaticSelfCalibration(1);
   scd4x.setTemperatureOffset(getTempOffset());
   scd4x.startPeriodicMeasurement();
@@ -578,7 +578,7 @@ void startWiFi() {
 
   char Hostname[28];
   snprintf(Hostname, 28, "OpenCO2-Sensor%llX", ESP.getEfuseMac());
-  WiFi.setHostname(Hostname); // hostname when conneced to home network
+  WiFi.setHostname(Hostname); // hostname when connected to home network
 
   wifiManager.setConfigPortalBlocking(false);
   wifiManager.autoConnect("OpenCO2 Sensor");  // name of broadcasted SSID  
@@ -623,7 +623,7 @@ void setup() {
   DEV_Module_Init();
 
   /* scd4x */
-  Wire.begin(33, 34); // grün, gelb
+  Wire.begin(33, 34); // green, yellow
   scd4x.begin(Wire);
 
   USB.onEvent(usbEventCallback);
@@ -680,7 +680,7 @@ void loop() {
     return; // otherwise continues running!
   }
 
-  // Read co2 Measurement
+  // Read co2 measurement
   uint16_t new_co2 = 400;
   float new_temperature = 0.0f;
   uint16_t error = scd4x.readMeasurement(new_co2, new_temperature, humidity);
@@ -690,7 +690,7 @@ void loop() {
     displayWriteError(errorMessage);
   } else {
     if (BatteryMode) saveMeasurement(new_co2);
-    /* dont update in Battery mode, unless CO2 has changed by 3% or temperature by 0.5°C */
+    /* don't update in Battery mode, unless CO2 has changed by 3% or temperature by 0.5°C */
     if (!TEST_MODE && BatteryMode && comingFromDeepSleep) {
       if ((abs(new_co2 - co2) < (0.03*co2)) && (fabs(new_temperature - temperature) < 0.5)) {
         goto_deep_sleep(30000);
