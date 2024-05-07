@@ -40,11 +40,11 @@ const int port = 9925;
 WebServer server(port);
 #endif /* airgradient */
 
-//#define MQTT
+// #define MQTT
 #ifdef MQTT
 #ifdef airgradient
 #error only activate one: MQTT or airgradient
-#endif /*airgradient*/
+#endif /* airgradient */
 #include <ArduinoMqttClient.h>
 WiFiClient wifiClient;
 MqttClient mqttClient(wifiClient);
@@ -179,23 +179,23 @@ void initOnce() {
   if (welcomeDone != 1) TEST_MODE = true;
 
   if (TEST_MODE) {
-    EEPROM.write(0, 0); //reset welcome
-    EEPROM.write(1, 2); //write HWSubRev 2
+    EEPROM.write(0, 0); // reset welcome
+    EEPROM.write(1, 2); // write HWSubRev 2
     EEPROM.commit();
     preferences.begin("co2-sensor", false); 
-    preferences.putFloat("MBV", 3.95); //default maxBatteryVoltage
+    preferences.putFloat("MBV", 3.95); // default maxBatteryVoltage
     preferences.end();
 
-    digitalWrite(LED_POWER, LOW); //LED on
+    digitalWrite(LED_POWER, LOW); // LED on
     strip.begin();
-    strip.setPixelColor(0, 5, 5, 5); //index, green, red, blue
+    strip.setPixelColor(0, 5, 5, 5); // index, green, red, blue
     strip.show();
 
     displayInitTestMode();
 
     scd4x.stopPeriodicMeasurement();
-    //scd4x.performFactoryReset();
-    //delay(100);
+    // scd4x.performFactoryReset();
+    // delay(100);
     scd4x.performSelfTest(sensorStatus);
   }
 
@@ -235,7 +235,7 @@ void setLED(uint16_t co2) {
     strip.show();
     return;
   }
-  digitalWrite(LED_POWER, LOW); //LED ON
+  digitalWrite(LED_POWER, LOW); // LED ON
   delay(10);
 
   int red = 0, green = 0, blue = 0;
@@ -392,7 +392,7 @@ float readBatteryVoltage() {
   if ((voltage > maxBatteryVoltage) && (voltage < 4.2) && (digitalRead(USB_PRESENT) == LOW)) {
      maxBatteryVoltage = voltage;
      preferences.begin("co2-sensor", false);
-     preferences.putFloat("MBV", voltage); //save maxBatteryVoltage
+     preferences.putFloat("MBV", voltage); // save maxBatteryVoltage
      preferences.end();
   }
   return voltage;
@@ -430,8 +430,8 @@ void calibrate() {
 
 #include "pictures.h"
 void rainbowMode() {
-  displayImage(gImage_rainbow); //  gImage_santa
-  digitalWrite(LED_POWER, LOW); //LED ON
+  displayImage(gImage_rainbow); // gImage_santa
+  digitalWrite(LED_POWER, LOW); // LED ON
 
   // Santa
   /*for(int j = 0; j < 256; j++) {
@@ -496,7 +496,7 @@ void saveMeasurement(uint16_t co2) {
 
 uint8_t qrcodeNumber = 0;
 void history() {
-  //DEMO DATA:
+  // DEMO DATA:
   /*hour = 2;
   for (int i=0; i<120; i++) {
     measurements[0][i] = 400+i;
