@@ -12,6 +12,8 @@
 */
 #define VERSION "v4.5"
 
+#define HEIGHT_ABOVE_SEA_LEVEL 50 // Berlin
+
 /* Includes display */
 #include "DEV_Config.h"
 #include "epd_abstraction.h"
@@ -216,7 +218,7 @@ void initOnce() {
 
   scd4x.stopPeriodicMeasurement(); // stop potentially previously started measurement
   scd4x.getSerialNumber(serial0, serial1, serial2);
-  scd4x.setSensorAltitude(50);     // Berlin: 50m above sea level
+  scd4x.setSensorAltitude(HEIGHT_ABOVE_SEA_LEVEL);
   scd4x.setAutomaticSelfCalibration(1);
   scd4x.setTemperatureOffset(getTempOffset());
   scd4x.startPeriodicMeasurement();
