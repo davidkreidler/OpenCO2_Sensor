@@ -1,11 +1,14 @@
 /*
-   ESP32S2 Dev Module
+   OpenCO2 Sensor using ESP32 and SCD4x
+
+   Arduino board: ESP32S2 Dev Module
    Required Arduino libraries:
    - esp32 waveshare epd
    - Adafruit DotStar
    - Sensirion Core
    - Sensirion I2C SCD4x: https://github.com/Sensirion/arduino-i2c-scd4x
    - WiFiManager: https://github.com/tzapu/WiFiManager
+   - ArduinoMqttClient (if MQTT is defined)
 */
 #define VERSION "v4.5"
 
