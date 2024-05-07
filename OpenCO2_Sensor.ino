@@ -34,7 +34,7 @@ Preferences preferences;
 #include <WiFiManager.h>
 WiFiManager wifiManager;
 
-#define airgradient
+// #define airgradient
 #ifdef airgradient
 /* use https://github.com/geerlingguy/internet-pi to store values */
 #include <WebServer.h>
@@ -43,7 +43,7 @@ const int port = 9925;
 WebServer server(port);
 #endif /* airgradient */
 
-// #define MQTT
+#define MQTT
 #ifdef MQTT
 #ifdef airgradient
 #error only activate one: MQTT or airgradient
@@ -86,7 +86,7 @@ RTC_DATA_ATTR int ledbrightness, HWSubRev, font;
 RTC_DATA_ATTR float maxBatteryVoltage;
 
 /* TEST_MODE */
-RTC_DATA_ATTR bool TEST_MODE;
+RTC_DATA_ATTR bool TEST_MODE = 1;  // wanted to see some log output on the serial monitor - is there a better way?
 RTC_DATA_ATTR uint16_t sensorStatus, serial0, serial1, serial2;
 
 RTC_DATA_ATTR uint16_t co2 = 400;
@@ -158,8 +158,9 @@ void saveCredentials() {
 
 void loadCredentials() {
   preferences.begin("co2-sensor", true);
-  String s_mqtt_server = preferences.getString("mqtt_server", "");
-  String s_mqtt_port = preferences.getString("mqtt_port", "");
+  // hard coded my ip / port here so I don't have to set it up via web form
+  String s_mqtt_server = preferences.getString("mqtt_server", "10.10.10.17");
+  String s_mqtt_port = preferences.getString("mqtt_port", "1883");
   String s_api_token = preferences.getString("api_token", "");
   preferences.end();
 
@@ -566,6 +567,7 @@ void toggleWiFi() {
 }
 
 void startWiFi() {
+  char msg[100];
   wifiManager.setSaveConfigCallback([]() {
 #ifdef MQTT 
    saveCredentials();
@@ -586,10 +588,34 @@ void startWiFi() {
   wifiManager.setConfigPortalBlocking(false);
   wifiManager.autoConnect("OpenCO2 Sensor");  // name of broadcasted SSID  
 
+  // is this needed?
+  while(WiFi.status() != WL_CONNECTED)
+      delay(10);
+  delay(5000);
+
 #ifdef MQTT
   loadCredentials();
   if(mqtt_server[0] != '\0' && mqtt_port[0] != '\0'){
-      mqttClient.connect(mqtt_server, (int)mqtt_port);
+      mqttClient.setId("OpenCO2");  // TODO: must be unique
+      // mqttClient.setUsernamePassword("openco2", "openco2");  // TODO: if anon is not allowed, we'ld need this!
+      int mport = atoi(mqtt_port);  // BUG FIX!
+      if(!mqttClient.connect(mqtt_server, mport)) {
+          snprintf(msg, 100, "MQTT connection to %s:%d failed! Error code = %d",
+                   mqtt_server, mport, mqttClient.connectError());
+
+// we always end here, error code -1 (TIMEOUT) after 30s
+// mosquitto server log:
+// 1715114141: New connection from 10.10.10.123:57599 on port 1883.
+// 1715114141: New client connected from 10.10.10.123:57599 as OpenCO2 (p2, c1, k60).
+// 1715114171: Client OpenCO2 closed its connection.
+// but why?
+
+      }else{
+          snprintf(msg, 100, "MQTT connection to %s:%d succeeded!", mqtt_server, mport);
+      }
+      Serial.println(msg);
+  }else{
+      Serial.println("MQTT: no server and/or no port configured!");
   }
 #endif /* MQTT */
 
@@ -710,13 +736,18 @@ void loop() {
 #ifdef MQTT
     if (!error && !BatteryMode) {
       if (WiFi.status() == WL_CONNECTED) {
-        mqttClient.beginMessage("co2_ppm");
-        mqttClient.print(co2);
-        mqttClient.endMessage();
-        mqttClient.beginMessage("temperature");
+        mqttClient.poll();  // needed?
+        int rc1, rc2, rc3;
+        rc1 = mqttClient.beginMessage("openco2/co2_ppm");
+        rc2 = mqttClient.print(co2);
+        rc3 = mqttClient.endMessage();
+        char result[100];
+        snprintf(result, 100, "MQTT msg sent %d %d %d", rc1, rc2, rc3); // "MQTT msg sent 1 4 0"
+        Serial.println(result);
+        mqttClient.beginMessage("openco2/temperature");
         mqttClient.print(temperature);
         mqttClient.endMessage();
-        mqttClient.beginMessage("humidity");
+        mqttClient.beginMessage("openco2/humidity");
         mqttClient.print(humidity);
         mqttClient.endMessage();
       }
