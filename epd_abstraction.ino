@@ -39,6 +39,14 @@ void changeFont(int font) {
   sml=fonts[font][2];
 }
 
+void clearMenu() {
+    refreshes = 1;
+    displayWriteMeasuerments(co2, temperature, humidity);
+    if (BatteryMode) displayBattery(calcBatteryPercentage(readBatteryVoltage()));
+    else if (useWiFi) displayWiFiStrengh(); 
+    updateDisplay();
+}
+
 bool buttonPressedAgain = false;
 void handleButtonPress() {
   uint8_t selectedOption = 0;
@@ -52,7 +60,7 @@ void handleButtonPress() {
 
   for (;;) { 
     if ((millis() - menuStartTime) > 20000) { // display Menu up to 20 sec
-      refreshes = 1;
+      clearMenu();
       return;
     }
 
@@ -67,35 +75,30 @@ void handleButtonPress() {
         switch (selectedOption) {
           case LED:
             LEDMenu();
-            refreshes = 1;
-            return;
+            break;
           case DISPLAY_MENU:
             OptionsMenu();
-            refreshes = 1;
-            return;
+            break;
           case CALIBRATE:
             calibrate();
-            refreshes = 1;
-            return;
+            break;
           case HISTORY:
             history();
-            refreshes = 1;
-            return;
+            break;
           case WLAN:
             toggleWiFi();
-            refreshes = 1;
-            return;
+            break;
           case INFO:
             displayinfo();
             while (digitalRead(BUTTON) != 0) delay(100); // wait for button press
-            refreshes = 1;
-            return;
+            break;
           case RAINBOW:
             rainbowMode();
             setLED(co2);
-            refreshes = 1;
-            return;
+            break;
         }
+        clearMenu();
+        return;
       } else { // goto next Menu point
         buttonPressedAgain = true; // display at least once
         while (buttonPressedAgain) {
@@ -160,7 +163,6 @@ void LEDMenu() {
             preferences.end();
             break;
           case EXIT_LED:
-            while(digitalRead(BUTTON) == 0) {} // wait until button is released
             return;
         }
         setLED(co2);
@@ -191,7 +193,7 @@ void OptionsMenu() {
   unsigned long menuStartTime = millis();
 
   for (;;) { 
-    if ((millis() - menuStartTime) > 20000) return; // display up to 20 sec
+    if ((millis() - menuStartTime) > 20000) return; // display up to 20 sec 
     mspressed = 0;
     if (digitalRead(BUTTON) == 0) {
       while(digitalRead(BUTTON) == 0) { // calculate how long BUTTON is pressed
@@ -228,7 +230,6 @@ void OptionsMenu() {
             preferences.end();
             break;
           case EXIT_DISPLAY:
-            while(digitalRead(BUTTON) == 0) {} // wait until button is released
             return;
         }
         displayOptionsMenu(selectedOption);
@@ -654,6 +655,7 @@ void displayWiFi(bool useWiFi) {
   Paint_Clear(BLACK);
 
   if (useWiFi) {
+    updateBatteryMode();
     if (BatteryMode) {
       if (english) {
         Paint_DrawString_EN(23, 52, "Wi-Fi: ON", &Font24, BLACK, WHITE);

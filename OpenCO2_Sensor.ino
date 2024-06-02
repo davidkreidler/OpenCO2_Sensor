@@ -14,11 +14,13 @@
 
 #define HEIGHT_ABOVE_SEA_LEVEL 50 // Berlin
 #define TZ_DATA "CET-1CEST,M3.5.0,M10.5.0/3" // Europe/Berlin time zone from https://github.com/nayarsystems/posix_tz_db/blob/master/zones.csv
+#define LIGHT_SLEEP_TIME 500
+#define DEEP_SLEEP_TIME 29500
 
 /* Includes display */
 #include "DEV_Config.h"
 #include "epd_abstraction.h"
-#define DISPLAY_POWER 45
+#define DISPLAY_POWER GPIO_NUM_45
 #define LED_POWER GPIO_NUM_9
 #define USB_PRESENT GPIO_NUM_4
 #define BATTERY_VOLTAGE GPIO_NUM_5
@@ -324,7 +326,7 @@ void goto_deep_sleep(int ms) {
   /* Wakeup by IO0 button */
   rtc_gpio_pullup_en(BUTTON);
   rtc_gpio_pulldown_dis(BUTTON);
-  esp_sleep_enable_ext1_wakeup(0x1,ESP_EXT1_WAKEUP_ANY_LOW); // 2^0 = GPIO_NUM_0 = BUTTON
+  esp_sleep_enable_ext1_wakeup(0x1,ESP_EXT1_WAKEUP_ALL_LOW); // 2^0 = GPIO_NUM_0 = BUTTON
 
   /* Keep LED enabled */
   if (LEDonBattery) gpio_hold_en(LED_POWER);
@@ -553,10 +555,11 @@ void toggleWiFi() {
   bool ip_shown = false;
   while (digitalRead(BUTTON) != 0) { // wait for button press
     delay(100);
+    wifiManager.process();
     if (!ip_shown && WiFi.status() == WL_CONNECTED) {
+      delay(100);
       ip_shown = true;
       displayWiFi(useWiFi); // to update displayed IP
-      wifiManager.process();
     }
     if (BatteryMode && (digitalRead(USB_PRESENT) == HIGH)) { // power got connected
       BatteryMode = false;
@@ -667,19 +670,18 @@ void loop() {
   updateBatteryMode(); // check again in USB Power mode
   measureESP32temperature();
 
-  if (useWiFi && !BatteryMode) wifiManager.process();
+  if (useWiFi && !BatteryMode) {
+    if (WiFi.status() != WL_CONNECTED) wifiManager.process();
+#ifdef airgradient
+    if (WiFi.status() == WL_CONNECTED) server.handleClient();
+#endif /* airgradient */
+  }
 
   bool isDataReady = false;
   uint16_t ready_error = scd4x.getDataReadyFlag(isDataReady);
   if (ready_error || !isDataReady) {
-    // needed to overwrite displayed Menu 
-    displayWriteMeasuerments(co2, temperature, humidity);
-    if (BatteryMode) displayBattery(calcBatteryPercentage(readBatteryVoltage()));
-    else if (useWiFi) displayWiFiStrengh(); 
-    updateDisplay();
-
-    if (BatteryMode) goto_deep_sleep(29000);
-    else goto_light_sleep(4000);
+    if (BatteryMode) goto_deep_sleep(DEEP_SLEEP_TIME);
+    else goto_light_sleep(LIGHT_SLEEP_TIME);
     return; // otherwise continues running!
   }
 
@@ -696,7 +698,7 @@ void loop() {
     /* don't update in Battery mode, unless CO2 has changed by 3% or temperature by 0.5°C */
     if (!TEST_MODE && BatteryMode && comingFromDeepSleep) {
       if ((abs(new_co2 - co2) < (0.03*co2)) && (fabs(new_temperature - temperature) < 0.5)) {
-        goto_deep_sleep(30000);
+        goto_deep_sleep(DEEP_SLEEP_TIME);
       }
     }
 
@@ -706,31 +708,19 @@ void loop() {
     displayWriteMeasuerments(co2, temperature, humidity);
   }
 
-  if (useWiFi) {
 #ifdef MQTT
-    if (!error && !BatteryMode) {
-      if (WiFi.status() == WL_CONNECTED) {
-        mqttClient.beginMessage("co2_ppm");
-        mqttClient.print(co2);
-        mqttClient.endMessage();
-        mqttClient.beginMessage("temperature");
-        mqttClient.print(temperature);
-        mqttClient.endMessage();
-        mqttClient.beginMessage("humidity");
-        mqttClient.print(humidity);
-        mqttClient.endMessage();
-      }
-    }
-#endif /* MQTT */
-
-#ifdef airgradient
-    if (!error && !BatteryMode) {
-      if (WiFi.status() == WL_CONNECTED) {
-        server.handleClient();
-      }
-    }
-#endif /* airgradient */
+  if (!error && !BatteryMode && useWiFi && WiFi.status() == WL_CONNECTED) {
+    mqttClient.beginMessage("co2_ppm");
+    mqttClient.print(co2);
+    mqttClient.endMessage();
+    mqttClient.beginMessage("temperature");
+    mqttClient.print(temperature);
+    mqttClient.endMessage();
+    mqttClient.beginMessage("humidity");
+    mqttClient.print(humidity);
+    mqttClient.endMessage();
   }
+#endif /* MQTT */
 
   if (TEST_MODE) {
 #if ARDUINO_USB_CDC_ON_BOOT && !ARDUINO_USB_MODE
@@ -761,8 +751,8 @@ void loop() {
       scd4x.setTemperatureOffset(0.8);
       scd4x.startLowPowerPeriodicMeasurement();
     }
-    goto_deep_sleep(29500);
+    goto_deep_sleep(DEEP_SLEEP_TIME);
   }
 
-  goto_light_sleep(4000);
+  goto_light_sleep(LIGHT_SLEEP_TIME);
 }
