@@ -18,12 +18,12 @@
 /* welcome */
 #include <EEPROM.h>
 
-RTC_DATA_ATTR int refreshes = 1;
+RTC_DATA_ATTR uint16_t refreshes = 1;
 RTC_DATA_ATTR UBYTE *BlackImage;
 extern bool BatteryMode, comingFromDeepSleep;
-extern int HWSubRev;
+extern uint8_t HWSubRev;
 
-extern int font;
+extern uint8_t font;
 sFONT fonts[3][3] = {
   bahn_big, bahn_mid, bahn_sml,
   gotham_big, gotham_mid, gotham_sml,
@@ -40,7 +40,7 @@ void changeFont(int font) {
 }
 
 void clearMenu() {
-    refreshes = 1;
+    //refreshes = 1;
     displayWriteMeasuerments(co2, temperature, humidity);
     if (BatteryMode) displayBattery(calcBatteryPercentage(readBatteryVoltage()));
     else if (useWiFi) displayWiFiStrengh(); 
@@ -50,7 +50,7 @@ void clearMenu() {
 bool buttonPressedAgain = false;
 void handleButtonPress() {
   uint8_t selectedOption = 0;
-  extern int refreshes;
+  extern uint16_t refreshes;
   refreshes = 1; // force full update
   comingFromDeepSleep = false; // force display update even if CO2 changed by less than 3%
   displayMenu(selectedOption);
@@ -259,6 +259,7 @@ void displayWelcome() {
   initEpdOnce();
 #ifdef EINK_1IN54V2
   Paint_DrawBitMap(gImage_welcome);
+  Paint_DrawString_EN(1, 1, VERSION, &Font16, WHITE, BLACK);
   EPD_1IN54_V2_Display(BlackImage);
   EPD_1IN54_V2_Sleep();
 #endif
@@ -463,31 +464,141 @@ void draw_qr_code(const uint8_t * qrcode) {
   }
 }
 
-void displayNoHistory() {
+void calculateStats(int* min, int* max, int* avg, int (*getValue)(const SensorData*)) {
+  extern uint8_t halfminute, hour;
+  int i, j, numEnties, sum = 0;
+  int value = getValue(&measurements[0][0]);
+  *min = value;
+  *max = value;
+
+  for (i=0; i<=hour; i++) {
+    if (i != hour) numEnties = 120;
+    else numEnties = halfminute;
+    for (j=0; j<numEnties; j++) {
+      value = getValue(&measurements[i][j]);
+      if (value < *min) *min = value;
+      if (value > *max) *max = value;
+      sum += value;
+    }
+  }
+
+  *avg = sum / (120.0 * hour + halfminute);
+}
+int getCO2        (const SensorData* data) { return data->co2; }
+int getHumidity   (const SensorData* data) { return data->humidity; }
+int getTemperature(const SensorData* data) { return data->temperature; }
+
+void displayCO2HistoryGraph() {
+  extern uint8_t halfminute, hour;
+  int min, max, avg;
+  calculateStats(&min, &max, &avg, getCO2);
+  float yscale = 184.0 / (max - min);
+  int numMeasurements = 120 * hour + halfminute;
+  float stepsPerPixel = numMeasurements / 200.0;
+
   Paint_Clear(WHITE);
-  if (english) {
-    Paint_DrawString_EN(15, 52, "Disconnect", &Font24, WHITE, BLACK);
-    Paint_DrawString_EN(15, 76, " power to ", &Font24, WHITE, BLACK);
-    Paint_DrawString_EN(15, 100, "  record  ", &Font24, WHITE, BLACK);
-    Paint_DrawString_EN(15+8, 124, " History ", &Font24, WHITE, BLACK);
-  } else {
-    Paint_DrawString_EN(58, 52, "Strom", &Font24, WHITE, BLACK);
-    Paint_DrawString_EN(15-8, 76, "trennen, um", &Font24, WHITE, BLACK);
-    Paint_DrawString_EN(15-8, 100, "Historie zu", &Font24, WHITE, BLACK);
-    Paint_DrawString_EN(15+8, 124, "speichern", &Font24, WHITE, BLACK);
+  Paint_DrawNum(0, 0, min, &Font16, BLACK, WHITE);
+  Paint_DrawString_EN((snprintf(0,0,"%+d",min)-1)*11, 0, "ppm", &Font16, WHITE, BLACK);
+  Paint_DrawNum(200-11*4, 0, max, &Font16, BLACK, WHITE);
+  Paint_DrawString_EN(100-11*2, 0, "O", &Font16, WHITE, BLACK);
+  Paint_DrawString_EN(100-11*2, 0, "/", &Font16, WHITE, BLACK);
+  Paint_DrawNum(100-11, 0, avg, &Font16, BLACK, WHITE);
+
+  char duration[20];
+  sprintf(duration, "%.1f", hour+halfminute/120.0);
+  strcat(duration, "h");
+  Paint_DrawString_EN(0, 200-16, "-", &Font16, WHITE, BLACK);
+  Paint_DrawString_EN(11, 200-16, duration, &Font16, WHITE, BLACK);
+  Paint_DrawString_EN(200-11*3, 200-16, "now", &Font16, WHITE, BLACK);
+
+  int privY = measurements[0][0].co2;
+  for (int x=1; x<200; x++) {
+    int y = measurements[(int)((x * stepsPerPixel) / 120.0)][(int)(x * stepsPerPixel) % 120].co2;
+    y = 200.0 - ((y - min) * yscale);
+    Paint_DrawLine(x-1, privY, x, y, BLACK, DOT_PIXEL_2X2, LINE_STYLE_SOLID);
+    privY = y;
+    for (int i = 200; i>y; i--) {
+      if (!(i%5)) Paint_DrawPoint(x, i, BLACK, DOT_PIXEL_1X1, DOT_FILL_AROUND);
+    }
   }
   updateDisplay();
 }
 
-void displayHistory(uint16_t measurements[24][120]) {
-  extern uint8_t halfminute, hour, qrcodeNumber;
+void displayTempHumHistoryGraph() {
+  extern uint8_t halfminute, hour;
+  int mintemp, maxtemp, avgtemp, minhum, maxhum, avghum;
+  calculateStats(&mintemp, &maxtemp, &avgtemp, getTemperature);
+  calculateStats(&minhum, &maxhum, &avghum, getHumidity);
+
+  float hight = 200.0 - 2*16.0;
+  float yscaletemp = hight / (maxtemp - mintemp);
+  float yscalehum = hight / (maxhum - minhum);
+  int numMeasurements = 120 * hour + halfminute;
+  float stepsPerPixel = numMeasurements / 200.0;
+
+  Paint_Clear(WHITE);
+  char temp[20];
+  sprintf(temp, "%.1f", mintemp/10.0);
+  strcat(temp, "C");
+  Paint_DrawString_EN(0, 0, temp, &Font16, WHITE, BLACK);
+  sprintf(temp, "%.1f", avgtemp/10.0);
+  Paint_DrawString_EN(100-11, 0, temp, &Font16, WHITE, BLACK);
+  sprintf(temp, "%.1f", maxtemp/10.0);
+  Paint_DrawString_EN(200-11*4, 0, temp, &Font16, WHITE, BLACK);
+
+  Paint_DrawString_EN(100-11-17, 4, "O", &Font24, WHITE, BLACK);
+  Paint_DrawString_EN(100-11-17, 4, "/", &Font24, WHITE, BLACK);
+
+  Paint_DrawNum(0, 16, minhum, &Font16, BLACK, WHITE);
+  Paint_DrawString_EN(11*2, 16, "%", &Font16, WHITE, BLACK);
+  Paint_DrawNum(100-11, 16, avghum, &Font16, BLACK, WHITE);
+  Paint_DrawString_EN(100+11, 16, "%", &Font16, WHITE, BLACK);
+  Paint_DrawNum(200-11*3, 16, maxhum, &Font16, BLACK, WHITE);
+  Paint_DrawString_EN(200-11, 16, "%", &Font16, WHITE, BLACK);
+
+  char duration[20];
+  sprintf(duration, "%.1f", hour+halfminute/120.0);
+  strcat(duration, "h");
+  Paint_DrawString_EN(0, 200-16, "-", &Font16, WHITE, BLACK);
+  Paint_DrawString_EN(11, 200-16, duration, &Font16, WHITE, BLACK);
+  Paint_DrawString_EN(200-11*3, 200-16, "now", &Font16, WHITE, BLACK);
+
+  int privYtemp = measurements[0][0].temperature;
+  int privYhum = measurements[0][0].humidity;
+
+  for (int x=1; x<200; x++) {
+    int ytemp = measurements[(int)((x * stepsPerPixel) / 120.0)][(int)(x * stepsPerPixel) % 120].temperature;
+    int yhum = measurements[(int)((x * stepsPerPixel) / 120.0)][(int)(x * stepsPerPixel) % 120].humidity;
+    ytemp = 200.0 - ((ytemp - mintemp) * yscaletemp);
+    yhum = 200.0 - ((yhum - minhum) * yscalehum);
+    Paint_DrawLine(x-1, privYtemp, x, ytemp, BLACK, DOT_PIXEL_2X2, LINE_STYLE_SOLID);
+    for (int i = 200; i>ytemp; i--) {
+      if (!(i%5)) Paint_DrawPoint(x, i, BLACK, DOT_PIXEL_2X2, DOT_FILL_AROUND);
+    }
+    Paint_DrawLine(x-1, privYhum, x, yhum, BLACK, DOT_PIXEL_1X1, LINE_STYLE_SOLID);
+    privYtemp = ytemp;
+    privYhum = yhum;
+  }
+  updateDisplay();
+}
+
+void displayHistory(uint8_t qrcodeNumber) {
+  if (qrcodeNumber == hour+2) {
+    displayCO2HistoryGraph();
+    return;
+  }
+  if (qrcodeNumber == hour+1) {
+    displayTempHumHistoryGraph();
+    return;
+  }
+
   char buffer[5*120+1];
   int numEnties = halfminute;
-  if (hour > qrcodeNumber) numEnties = 120; // display all values included in previous hours
+  if (hour != qrcodeNumber) numEnties = 120; // display all values included in previous hours
 
   for (int i=0; i<numEnties; i++) {
     char tempStr[6];
-    snprintf(tempStr, sizeof(tempStr), "%d", measurements[qrcodeNumber][i]);
+    snprintf(tempStr, sizeof(tempStr), "%d", measurements[qrcodeNumber][i].co2);
 
     if (i == 0) snprintf(buffer, sizeof(buffer), "%s", tempStr);
     else snprintf(buffer + strlen(buffer), sizeof(buffer) - strlen(buffer), " %s", tempStr);
@@ -501,9 +612,57 @@ void displayHistory(uint16_t measurements[24][120]) {
   else Paint_DrawNum(200-4*11, 200-16, qrcodeNumber+1, &Font16, BLACK, WHITE);
   Paint_DrawString_EN(200-3*11, 200-16, "/", &Font16, WHITE, BLACK);
   Paint_DrawNum(200-2*11, 200-16, hour+1, &Font16, BLACK, WHITE);
-  if (english) Paint_DrawString_EN(1, 1, "Wait 20sec to exit", &Font16, WHITE, BLACK);
-  else         Paint_DrawString_EN(1, 1, "20 Sek. warten", &Font16, WHITE, BLACK);
+  if (english) Paint_DrawString_EN(1, 1, "long press = exit", &Font16, WHITE, BLACK);
+  else         Paint_DrawString_EN(1, 1, " halten = beenden", &Font16, WHITE, BLACK);
   updateDisplay();
+}
+
+//uint8_t qrcodeNumber = 0;
+void history() {
+  // DEMO DATA:
+  /*hour = 2;
+  for (int i=0; i<120; i++) {
+    measurements[0][i].co2 = 400+i;
+    measurements[1][i].co2 = 520+i;
+    measurements[2][i].co2 = 1000+i;
+    measurements[0][i].temperature = 200+i;
+    measurements[1][i].temperature = 320-i;
+    measurements[2][i].temperature = 10+i;
+    measurements[0][i].humidity = 20+i/2;
+    measurements[1][i].humidity = 80-i/2;
+    measurements[2][i].humidity = 10+i/2;
+  }
+  halfminute = 120;*/
+  uint16_t mspressed;
+  unsigned long historyStartTime = millis();
+  uint8_t qrcodeNumber = hour+2; // start at CO2 graph
+  refreshes = 1; // force full update
+  displayHistory(qrcodeNumber);
+
+  for (;;) { 
+    if ((millis() - historyStartTime) > 30000) { // display History up to 30 sec
+      clearMenu();
+      return;
+    }
+    mspressed = 0;
+    if (digitalRead(BUTTON) == 0) {
+      while(digitalRead(BUTTON) == 0) { // calculate how long BUTTON is pressed
+        delay(100);
+        mspressed += 100;
+        if (mspressed == 1000) break;
+      }
+      if (mspressed == 1000) { // long press
+        clearMenu();
+        return;
+      } else { // goto next History point
+        if (qrcodeNumber == 0) qrcodeNumber = hour+2;
+        else qrcodeNumber--;
+        refreshes = 1; // force full update
+        displayHistory(qrcodeNumber);
+        historyStartTime = millis(); // display History again for 30 sec
+      }
+    }
+  }
 }
 
 void displayMenu(uint8_t selectedOption) {

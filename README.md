@@ -4,7 +4,7 @@
 
 ![alt text](https://github.com/davidkreidler/OpenCO2_Sensor/raw/main/pictures/Header.png)
 
-OpenCO2 Sensor is an Arduino IDE compatible Repository for an E-Ink Indoor air quality Sensor using the ESP32, SCD4X and an RBG LED.
+OpenCO2 Sensor is an Arduino IDE compatible Repository for an E-Ink Indoor air quality Sensor using the ESP32, SCD4X and an RGB LED.
 
 ## Buy it [here on Tindie](https://www.tindie.com/products/davidkreidler/open-co2-sensor/)
 
@@ -41,16 +41,17 @@ Size: 4.7 x 4.1 x 2.4 cm
 # Menu
 
 Press the Menu button on the backside of the OpenCO2 Sensor. Select an option via long press (1+ sec) or move to next menu point via a short press. Choose between:
-* `LED toggle` enable or disable the LED in battery mode
-* `Rainbow` fun little easter egg (press ↪️ to exit)
+* `LED` control color, brightness and when the LED should be enabled
+* `Display` can be inverted. Also change the Temperature unit, language and font
 * `Calibrate` put the sensor outside for 3+ minutes (only run this, if calibration is needed)
-* `History` display up to 24 QR codes containing 1h of measurements each (only stored in battery mode)
+* `History` display up to 18h of CO2, temperature and humidity as a graph. Values can also be exported via QR codes containing 1h of CO2 measurements each.
 * `Wi-Fi` enable or disable wireless connections
-* `Exit` quit Menu (automatically after 20 sec)
+* `Info` shows MAC Address, serial numbers, uptime, version and battery details
+* `Rainbow` fun little easter egg
 
 # Wi-Fi
 
-Enable Wi-Fi via the Menu button. When power is connected, an access point `OpenCO2 Sensor` is enabled. Connect to it and navigate to http://192.168.4.1 (it will open automatically on modern Smartphones). Insert your home Wi-Fi credentials under `Configure WiFi`. Choose your network name from the list in the top and insert the password. Click `Save`. The sensor will now be automatically connected. Navigate to ip:9925 to see current co2/temperature/humidity measurements.
+Enable Wi-Fi via the Menu button. When power is connected, an access point `OpenCO2 Sensor` is enabled. Connect to it and navigate to http://192.168.4.1 (it will open automatically on modern Smartphones). Insert your home Wi-Fi credentials under `Configure WiFi`. Choose your network name from the list in the top and insert the password. Click `Save`. The sensor will now be automatically connected. Navigate to IP:9925 to see current co2/temperature/humidity measurements.
 ![alt text](https://github.com/davidkreidler/OpenCO2_Sensor/raw/main/pictures/setup.jpg)
 
 # AirGradient / Grafana
@@ -58,13 +59,19 @@ Enable Wi-Fi via the Menu button. When power is connected, an access point `Open
 Use [internet-pi](https://github.com/geerlingguy/internet-pi) to store the CO2 / Temperature / Humidity data on your Pi. First connect the OpenCO2 Sensor to your Wi-Fi network and follow the instructions https://www.youtube.com/watch?v=Cmr5VNALRAg Then download the https://raw.githubusercontent.com/davidkreidler/OpenCO2_Sensor/main/grafana_OpenCO2_Sensor.json and import it into Grafana.
 ![alt text](https://github.com/davidkreidler/OpenCO2_Sensor/raw/main/pictures/grafana.png)
 
+# Update via USB
+
+1. Download `FIRMWARE.BIN` from the latest [release](https://github.com/davidkreidler/OpenCO2_Sensor/releases)
+2. Plug a data USB-C cable into your PC and the Sensor
+3. copy `FIRMWARE.BIN` to the USB device
+
 # OTA Update
 
-Download `OpenCO2_Sensor.ino.bin` from the latest [release](https://github.com/davidkreidler/OpenCO2_Sensor/releases).
+Download `FIRMWARE.BIN` from the latest [release](https://github.com/davidkreidler/OpenCO2_Sensor/releases).
 Enable Wi-Fi via the Menu button, in an area where no previously known network is active. Connect power. Then connect to `OpenCO2 Sensor` and navigate to http://192.168.4.1 . Under `Update` select the `OpenCO2_Sensor.ino.bin` file and click `Update`. The Sensor will restart.
 ![alt text](https://github.com/davidkreidler/OpenCO2_Sensor/raw/main/pictures/OTA.jpg)
 
-# Update via USB
+# Update via USB (from an old release)
 
 1. Download all files from the latest [release](https://github.com/davidkreidler/OpenCO2_Sensor/releases)
 2. Make sure, that the power switch is in the `ON` position (down)

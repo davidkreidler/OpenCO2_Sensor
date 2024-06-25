@@ -10,7 +10,7 @@
    - WiFiManager: https://github.com/tzapu/WiFiManager
    - ArduinoMqttClient (if MQTT is defined)
 */
-#define VERSION "v4.5"
+#define VERSION "v4.6"
 
 #define HEIGHT_ABOVE_SEA_LEVEL 50 // Berlin
 #define TZ_DATA "CET-1CEST,M3.5.0,M10.5.0/3" // Europe/Berlin time zone from https://github.com/nayarsystems/posix_tz_db/blob/master/zones.csv
@@ -84,7 +84,7 @@ SensirionI2CScd4x scd4x;
 
 RTC_DATA_ATTR bool USB_ACTIVE = false, initDone = false, BatteryMode = false, comingFromDeepSleep = false;
 RTC_DATA_ATTR bool LEDonBattery, LEDonUSB, useSmoothLEDcolor, invertDisplay, useFahrenheit, useWiFi, english;
-RTC_DATA_ATTR int ledbrightness, HWSubRev, font;
+RTC_DATA_ATTR uint8_t ledbrightness, HWSubRev, font;
 RTC_DATA_ATTR float maxBatteryVoltage;
 
 /* TEST_MODE */
@@ -484,49 +484,22 @@ void rainbowMode() {
 
 RTC_DATA_ATTR uint8_t hour = 0;
 RTC_DATA_ATTR uint8_t halfminute = 0;
-RTC_DATA_ATTR uint16_t measurements[24][120];
-void saveMeasurement(uint16_t co2) {
+#define NUM_HOURS 16 // ESP32-S2 slow RTC memory limitation
+RTC_DATA_ATTR SensorData measurements[NUM_HOURS][120];
+void saveMeasurement(uint16_t co2, float temperature, float humidity) {
   if (halfminute == 120) {
     halfminute=0;
     hour++;
   }
-  if (hour == 24) {
-    for (int i=0; i<23; ++i) memcpy(measurements[i], measurements[i + 1], sizeof(uint16_t) * 120);
-    hour = 23;
+  if (hour == NUM_HOURS) {
+    for (int i=0; i<NUM_HOURS-1; ++i) memcpy(measurements[i], measurements[i + 1], sizeof(SensorData) * 120);  // destination, source
+    hour = NUM_HOURS-1;
   }
 
-  measurements[hour][halfminute] = co2;
+  measurements[hour][halfminute].co2 = co2;
+  measurements[hour][halfminute].temperature = (uint16_t)temperature*10;
+  measurements[hour][halfminute].humidity = (uint8_t)humidity;
   halfminute++;
-}
-
-uint8_t qrcodeNumber = 0;
-void history() {
-  // DEMO DATA:
-  /*hour = 2;
-  for (int i=0; i<120; i++) {
-    measurements[0][i] = 400+i;
-    measurements[1][i] = 520+i;
-    measurements[2][i] = 1000+i;
-  }
-  halfminute = 120;*/
-
-  if (halfminute == 0 && hour == 0) { // no history data
-    displayNoHistory();
-    unsigned long StartTime = millis();
-    for (;;) if ((millis() - StartTime) > 20000 || digitalRead(BUTTON) == 0) return; // wait for button press OR up to 20 sec
-  }
-
-  qrcodeNumber = hour; // start at current hour
-  for (int i=0; i<200; i++) {
-    if (digitalRead(BUTTON) == 0) {  // goto next qr code
-      displayHistory(measurements);
-      delay(500);
-      if (qrcodeNumber == hour) qrcodeNumber = 0;
-      else qrcodeNumber++;
-      i = 0; // display qrcode again for 20 sec
-    }
-    delay(100);
-  }
 }
 
 void handleWiFiChange() {
@@ -612,7 +585,7 @@ void startWiFi() {
 float currentTemp = temperatureRead();
 RTC_DATA_ATTR float ESP32temps[10] = {currentTemp,currentTemp,currentTemp,currentTemp,currentTemp,currentTemp,currentTemp,currentTemp,currentTemp,currentTemp};
 RTC_DATA_ATTR float sumTemp = currentTemp * 10;
-RTC_DATA_ATTR int indexTemp = 0;
+RTC_DATA_ATTR uint8_t indexTemp = 0;
 void measureESP32temperature() {
   currentTemp = temperatureRead();
   sumTemp -= ESP32temps[indexTemp];
@@ -694,7 +667,8 @@ void loop() {
     errorToString(error, errorMessage, 256);
     displayWriteError(errorMessage);
   } else {
-    if (BatteryMode) saveMeasurement(new_co2);
+    extern int refreshes;
+    if (BatteryMode || (refreshes%6 == 1)) saveMeasurement(new_co2, new_temperature, humidity);
     /* don't update in Battery mode, unless CO2 has changed by 3% or temperature by 0.5°C */
     if (!TEST_MODE && BatteryMode && comingFromDeepSleep) {
       if ((abs(new_co2 - co2) < (0.03*co2)) && (fabs(new_temperature - temperature) < 0.5)) {

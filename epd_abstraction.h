@@ -80,6 +80,12 @@ const char* GermanOptionsMenuItems[NUM_DISPLAY_OPTIONS] = {
   "Beenden"
 };
 
+typedef struct {
+    uint8_t humidity : 7;      // 7 bits (range 0 to 100)
+    uint16_t temperature : 9;  // 9 bits (/10= range 0 to 51.1°C )
+    uint16_t co2;
+} SensorData;
+
 void handleButtonPress();
 void changeFont(int font);
 void displayWelcome();
@@ -93,8 +99,6 @@ void displayWriteTestResults(float voltage, uint16_t sensorStatus);
 void displayBattery(uint8_t percentage);
 void updateDisplay();
 void displayImage(const unsigned char* image_buffer);
-void displayHistory(uint16_t measurements[24][120]);
-void displayNoHistory();
 void displayCalibrationWarning();
 void displayWiFi(bool useWiFi);
 void displayWiFiStrengh();
