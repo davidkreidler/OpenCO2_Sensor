@@ -667,7 +667,7 @@ void loop() {
     errorToString(error, errorMessage, 256);
     displayWriteError(errorMessage);
   } else {
-    extern int refreshes;
+    extern uint16_t refreshes;
     if (BatteryMode || (refreshes%6 == 1)) saveMeasurement(new_co2, new_temperature, humidity);
     /* don't update in Battery mode, unless CO2 has changed by 3% or temperature by 0.5°C */
     if (!TEST_MODE && BatteryMode && comingFromDeepSleep) {

@@ -50,7 +50,6 @@ void clearMenu() {
 bool buttonPressedAgain = false;
 void handleButtonPress() {
   uint8_t selectedOption = 0;
-  extern uint16_t refreshes;
   refreshes = 1; // force full update
   comingFromDeepSleep = false; // force display update even if CO2 changed by less than 3%
   displayMenu(selectedOption);
@@ -575,7 +574,7 @@ void displayTempHumHistoryGraph() {
     for (int i = 200; i>ytemp; i--) {
       if (!(i%5)) Paint_DrawPoint(x, i, BLACK, DOT_PIXEL_2X2, DOT_FILL_AROUND);
     }
-    Paint_DrawLine(x-1, privYhum, x, yhum, BLACK, DOT_PIXEL_1X1, LINE_STYLE_SOLID);
+    Paint_DrawLine(x-1, privYhum, x, yhum, BLACK, DOT_PIXEL_2X2, LINE_STYLE_SOLID);
     privYtemp = ytemp;
     privYhum = yhum;
   }
