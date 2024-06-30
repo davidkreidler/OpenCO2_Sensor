@@ -44,7 +44,7 @@ Press the Menu button on the backside of the OpenCO2 Sensor. Select an option vi
 * `LED` control color, brightness and when the LED should be enabled
 * `Display` can be inverted. Also change the Temperature unit, language and font
 * `Calibrate` put the sensor outside for 3+ minutes (only run this, if calibration is needed)
-* `History` display up to 18h of CO2, temperature and humidity as a graph. Values can also be exported via QR codes containing 1h of CO2 measurements each.
+* `History` display up to 24h of CO2, temperature and humidity as a graph. Values can also be exported via QR codes containing 1h of CO2 measurements each.
 * `Wi-Fi` enable or disable wireless connections
 * `Info` shows MAC Address, serial numbers, uptime, version and battery details
 * `Rainbow` fun little easter egg

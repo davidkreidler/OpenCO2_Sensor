@@ -83,8 +83,7 @@ const char* GermanOptionsMenuItems[NUM_DISPLAY_OPTIONS] = {
 typedef struct {
     uint8_t humidity : 7;      // 7 bits (range 0 to 100)
     uint16_t temperature : 9;  // 9 bits (/10= range 0 to 51.1°C )
-    uint16_t co2;
-} SensorData;
+} tempHumData;
 
 void handleButtonPress();
 void changeFont(int font);

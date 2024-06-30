@@ -10,10 +10,10 @@
    - WiFiManager: https://github.com/tzapu/WiFiManager
    - ArduinoMqttClient (if MQTT is defined)
 */
-#define VERSION "v4.6"
+#define VERSION "v5.0"
 
-#define HEIGHT_ABOVE_SEA_LEVEL 50 // Berlin
-#define TZ_DATA "CET-1CEST,M3.5.0,M10.5.0/3" // Europe/Berlin time zone from https://github.com/nayarsystems/posix_tz_db/blob/master/zones.csv
+#define HEIGHT_ABOVE_SEA_LEVEL 50             // Berlin
+#define TZ_DATA "CET-1CEST,M3.5.0,M10.5.0/3"  // Europe/Berlin time zone from https://github.com/nayarsystems/posix_tz_db/blob/master/zones.csv
 #define LIGHT_SLEEP_TIME 500
 #define DEEP_SLEEP_TIME 29500
 
@@ -65,7 +65,7 @@ WiFiManagerParameter custom_api_token("apikey", "API token", api_token, 32);
 /* led */
 #include <Adafruit_DotStar.h>
 #include <SPI.h>
-Adafruit_DotStar strip(1, 40, 39, DOTSTAR_BRG); // numLEDs, DATAPIN, CLOCKPIN
+Adafruit_DotStar strip(1, 40, 39, DOTSTAR_BRG);  // numLEDs, DATAPIN, CLOCKPIN
 #include "driver/rtc_io.h"
 
 /* scd4x */
@@ -94,6 +94,11 @@ RTC_DATA_ATTR uint16_t sensorStatus, serial0, serial1, serial2;
 RTC_DATA_ATTR uint16_t co2 = 400;
 RTC_DATA_ATTR float temperature = 0.0f, humidity = 0.0f;
 
+RTC_DATA_ATTR uint8_t hour = 0;
+RTC_DATA_ATTR uint8_t halfminute = 0;
+RTC_DATA_ATTR uint16_t co2measurements[24][120];        // every 30 sec
+RTC_DATA_ATTR tempHumData tempHumMeasurements[24][40];  // every 1.5 minutes
+
 /* WIFI */
 bool shouldSaveConfig = false;
 void saveConfigCallback() {
@@ -101,6 +106,30 @@ void saveConfigCallback() {
 }
 
 #ifdef airgradient
+const static byte tblFavicon[] PROGMEM = {
+  0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 0x00, 0x00, 0x00, 0x0D, 0x49, 0x48, 0x44, 0x52,
+  0x00, 0x00, 0x00, 0x30, 0x00, 0x00, 0x00, 0x30, 0x08, 0x03, 0x00, 0x00, 0x00, 0x60, 0xDC, 0x09,
+  0xB5, 0x00, 0x00, 0x00, 0x19, 0x74, 0x45, 0x58, 0x74, 0x53, 0x6F, 0x66, 0x74, 0x77, 0x61, 0x72,
+  0x65, 0x00, 0x41, 0x64, 0x6F, 0x62, 0x65, 0x20, 0x49, 0x6D, 0x61, 0x67, 0x65, 0x52, 0x65, 0x61,
+  0x64, 0x79, 0x71, 0xC9, 0x65, 0x3C, 0x00, 0x00, 0x00, 0x06, 0x50, 0x4C, 0x54, 0x45, 0x4D, 0x93,
+  0x51, 0xFF, 0xFF, 0xFF, 0xF3, 0x08, 0xB3, 0x68, 0x00, 0x00, 0x00, 0x02, 0x74, 0x52, 0x4E, 0x53,
+  0xFF, 0x00, 0xE5, 0xB7, 0x30, 0x4A, 0x00, 0x00, 0x00, 0x8B, 0x49, 0x44, 0x41, 0x54, 0x78, 0xDA,
+  0xDC, 0xD6, 0x3B, 0x12, 0x80, 0x20, 0x0C, 0x45, 0xD1, 0x9B, 0xFD, 0x6F, 0xDA, 0xCE, 0x41, 0xC8,
+  0x57, 0x44, 0x1D, 0x28, 0xE1, 0x1D, 0x0A, 0x08, 0x13, 0x10, 0x65, 0x70, 0x0E, 0x65, 0xCD, 0x49,
+  0xAB, 0x86, 0x20, 0x3E, 0x10, 0xC2, 0x78, 0x47, 0xC8, 0xE4, 0x5B, 0x41, 0x2A, 0xDF, 0x08, 0x72,
+  0xF9, 0x3A, 0x60, 0x04, 0x90, 0x12, 0xF7, 0x01, 0xE4, 0xC4, 0x7B, 0x80, 0x05, 0x80, 0x8F, 0x81,
+  0xF9, 0x32, 0x74, 0xA0, 0xEF, 0x62, 0x03, 0xA3, 0xBE, 0x9E, 0x03, 0xD6, 0x9B, 0xDA, 0x1A, 0xD4,
+  0x8F, 0xD5, 0xA8, 0x79, 0xAF, 0x34, 0x8A, 0x37, 0xBD, 0x05, 0x28, 0x9F, 0xD2, 0x0A, 0x20, 0x31,
+  0x90, 0xDF, 0x03, 0x51, 0xDB, 0x4D, 0xB2, 0x3F, 0x88, 0x33, 0x89, 0xDF, 0xFF, 0xBD, 0x96, 0xD5,
+  0xAC, 0x7A, 0x53, 0x53, 0x40, 0x6C, 0x10, 0x7C, 0x1D, 0xFA, 0x89, 0xE8, 0x73, 0xD2, 0xEF, 0x70,
+  0x09, 0x1C, 0x02, 0x0C, 0x00, 0xB9, 0xE7, 0x04, 0x19, 0xD7, 0xEF, 0x56, 0xBE, 0x00, 0x00, 0x00,
+  0x00, 0x49, 0x45, 0x4E, 0x44, 0xAE, 0x42, 0x60, 0x82
+};
+void handleFavicon() {
+  server.sendHeader("Content-Encoding", "identity");
+  server.send_P(200, "image/png", (const char*)tblFavicon, sizeof(tblFavicon));
+}
+
 String GenerateMetrics() {
   String message = "";
   String idString = "{id=\"" + String("Open CO2 Sensor") + "\",mac=\"" + WiFi.macAddress().c_str() + "\"}";
@@ -129,8 +158,97 @@ String GenerateMetrics() {
   return message;
 }
 
+String getHexColors(uint16_t co2) {
+  int red, green, blue;
+  getColor(co2, &red, &green, &blue);
+  char hexString[7];
+  sprintf(hexString, "%02X%02X%02X", red, green, blue);
+  return String(hexString);
+}
+
+String GenerateHtml() {
+  String message = "<!DOCTYPE html>\n <html>\n";
+  message += "<head>\n <title>OpenCO2 Sensor</title>\n <link rel='icon' href='/favicon.ico' type='image/png' />\n <meta http-equiv='refresh' content='300'>\n";
+  message += "<style> .container { display: flex; gap: 15px; } .rounded-box { font-family: Verdana, Geneva, sans-serif; width: 400px; height: 300px; border-radius: 25px; position: relative; display: flex; flex-direction: column; justify-content: center; font-size: 4em; border: 4px solid #ccc; } .descr-text { position: absolute; top: 10px; left: 10px; font-size: 0.5em; } .center-text { font-size: 1.5em; text-align: center; } .unit-text { font-size: 0.5em; } </style>";
+  message += "</head>\n";
+
+  message += "<script src='https://cdn.plot.ly/plotly-latest.min.js'></script>\n";
+  message += "<body>\n";
+
+  message += "<div class='container'><div class='rounded-box' style='background-color:#" + getHexColors(co2) + "; color:#FFFFFF;'><div class='descr-text'>CO2</div><div class='center-text'><b>" + String(co2) + "</b><div class='unit-text'>ppm</div></div></div>\n";
+  char tempString[6];
+  if (useFahrenheit) sprintf(tempString, "%.1f",(temperature * 1.8f) + 32.0f);  // convert to °F
+  else               sprintf(tempString, "%.1f", temperature);
+  message += "<div class='rounded-box'><div class='descr-text'>Temperature</div><div class='center-text'><b>" + String(tempString) + "</b><div class='unit-text'>";
+  if (useFahrenheit) message += "*F";
+  else               message += "*C";
+  message += "</div></div></div>\n";
+  message += "<div class='rounded-box'><div class='descr-text'>Humidity</div><div class='center-text'><b>" + String((int)humidity) + "</b><div class='unit-text'>%</div></div></div></div>\n";
+  message += "<div id='CO2Plot' style='width:100%;max-width:1400px'></div>\n";
+  message += "<div id='TempHumPlot' style='width:100%;max-width:1400px'></div>\n";
+  message += "<script>\n";
+
+  String xValues = "", yValues = "";
+  char time[80];
+  struct tm timeinfo;
+  getLocalTime(&timeinfo);
+  time_t now = mktime(&timeinfo);
+  for (int i = (hour * 120 + halfminute) - 1; i >= 0; i--) {
+    time_t timestamp = now - i * 30;
+    struct tm* timeinfo = localtime(&timestamp);
+    strftime(time, 80, "%Y-%m-%d %H:%M:%S", timeinfo);
+    xValues += "'" + String(time) + "',";
+  }
+  int i, j, numEnties;
+  for (i = 0; i <= hour; i++) {
+    if (i != hour) numEnties = 120;
+    else numEnties = halfminute;
+    for (j = 0; j < numEnties; j++) {
+      yValues += String(co2measurements[i][j]) + ",";
+    }
+  }
+  message += "const xValues = [" + xValues + "];\n";
+  message += "const yValues = [" + yValues + "];\n";
+  message += "const data = [{x:xValues, y:yValues, mode:'lines'}];\n";
+  message += "const layout = {yaxis: { title: 'CO2 (ppm)'}, title: 'History'};\n";
+  message += "Plotly.newPlot('CO2Plot', data, layout);\n";
+
+  String x1Values = "", y1Values = "", y2Values = "";
+  getLocalTime(&timeinfo);
+  now = mktime(&timeinfo);
+  for (int i = (hour * 40 + ceil(halfminute / 3.0)) - 1; i >= 0; i--) {
+    time_t timestamp = now - i * 90;
+    struct tm* timeinfo = localtime(&timestamp);
+    strftime(time, 80, "%Y-%m-%d %H:%M:%S", timeinfo);
+    x1Values += "'" + String(time) + "',";
+  }
+  for (i = 0; i <= hour; i++) {
+    if (i != hour) numEnties = 40;
+    else numEnties = ceil(halfminute / 3.0);
+    for (j = 0; j < numEnties; j++) {
+      float temp = tempHumMeasurements[i][j].temperature / 10.0;
+      if (useFahrenheit) temp = (temp * 1.8f) + 32.0f;  // convert to °F
+      y1Values += String(temp) + ",";
+      y2Values += String(tempHumMeasurements[i][j].humidity) + ",";
+    }
+  }
+  message += "const data2 = [{x: [" + x1Values + "], y: [" + y1Values +"], name: 'Temperature', mode:'lines'}, ";
+  message += "{x: [" + x1Values + "], y: [" + y2Values + "], name: 'Humidity', yaxis: 'y2', mode:'lines'}];\n";
+  message += "const layout2 = { showlegend: false, yaxis: {title: 'Temperature (";
+  if (useFahrenheit) message += "*F";
+  else               message += "*C";
+  message += ")'}, yaxis2: { title: 'Humidity (%)', overlaying: 'y', side: 'right'}};\n";
+  message += "Plotly.newPlot('TempHumPlot', data2, layout2);\n";
+
+  message += "</script>\n </body>\n </html>\n";
+  return message;
+}
+
+void HandleRootClient() {
+  server.send(200, "text/html", GenerateHtml());
+}
 void HandleRoot() {
-  server.send(200, "text/plain", GenerateMetrics() );
+  server.send(200, "text/plain", GenerateMetrics());
 }
 
 void HandleNotFound() {
@@ -178,22 +296,22 @@ float getTempOffset() {
 
 void initOnce() {
   initEpdOnce();
-  EEPROM.begin(2); // EEPROM_SIZE
+  EEPROM.begin(2);  // EEPROM_SIZE
 
   int welcomeDone = EEPROM.read(0);
   if (welcomeDone != 1) TEST_MODE = true;
 
   if (TEST_MODE) {
-    EEPROM.write(0, 0); // reset welcome
-    EEPROM.write(1, 2); // write HWSubRev 2
+    EEPROM.write(0, 0);  // reset welcome
+    EEPROM.write(1, 2);  // write HWSubRev 2
     EEPROM.commit();
-    preferences.begin("co2-sensor", false); 
-    preferences.putFloat("MBV", 3.95); // default maxBatteryVoltage
+    preferences.begin("co2-sensor", false);
+    preferences.putFloat("MBV", 3.95);  // default maxBatteryVoltage
     preferences.end();
 
-    digitalWrite(LED_POWER, LOW); // LED on
+    digitalWrite(LED_POWER, LOW);  // LED on
     strip.begin();
-    strip.setPixelColor(0, 5, 5, 5); // index, green, red, blue
+    strip.setPixelColor(0, 5, 5, 5);  // index, green, red, blue
     strip.show();
 
     displayInitTestMode();
@@ -219,7 +337,7 @@ void initOnce() {
   english = preferences.getBool("english", false);
   preferences.end();
 
-  scd4x.stopPeriodicMeasurement(); // stop potentially previously started measurement
+  scd4x.stopPeriodicMeasurement();  // stop potentially previously started measurement
   scd4x.getSerialNumber(serial0, serial1, serial2);
   scd4x.setSensorAltitude(HEIGHT_ABOVE_SEA_LEVEL);
   scd4x.setAutomaticSelfCalibration(1);
@@ -227,56 +345,59 @@ void initOnce() {
   scd4x.startPeriodicMeasurement();
 
   displayInit();
-  delay(3000); // Wait for co2 measurement
+  delay(3000);  // Wait for co2 measurement
   initDone = true;
+}
+
+void getColor(uint16_t co2, int* red, int* green, int* blue) {
+  *red = 0; *green = 0; *blue = 0;
+  if (useSmoothLEDcolor) {
+    if (co2 > 2000) {
+      *red = 216; *green = 2; *blue = 131;  // magenta
+    } else {
+      *red = pow((co2 - 400),   2) / 10000;
+      *green = -pow((co2 - 400), 2) / 4500 + 255;
+
+      if (*red < 0)     *red = 0;
+      if (*red > 255)   *red = 255;
+      if (*green < 0)   *green = 0;
+      if (*green > 255) *green = 255;
+    }
+  } else {
+    if (co2 < 600) {
+      *green = 255;
+    } else if (co2 < 800) {
+      *red = 60; *green = 200;
+    } else if (co2 < 1000) {
+      *red = 140; *green = 120;
+    } else if (co2 < 1500) {
+      *red = 200; *green = 60;
+    } else if (co2 < 2000) {
+      *red = 255;
+    } else {
+      *red = 216; *green = 2; *blue = 131;  // magenta
+    }
+  }
 }
 
 void setLED(uint16_t co2) {
   updateBatteryMode();
   if ((BatteryMode && !LEDonBattery)
-  || (!BatteryMode && !LEDonUSB)) {
-    digitalWrite(LED_POWER, HIGH); // LED OFF
+      || (!BatteryMode && !LEDonUSB)) {
+    digitalWrite(LED_POWER, HIGH);  // LED OFF
     strip.clear();
     strip.show();
     return;
   }
-  digitalWrite(LED_POWER, LOW); // LED ON
+  digitalWrite(LED_POWER, LOW);  // LED ON
   delay(10);
 
-  int red = 0, green = 0, blue = 0;
+  int red, green, blue;
+  getColor(co2, &red, &green, &blue);
 
-  if (useSmoothLEDcolor) {
-    if (co2 > 2000) {
-      red = 216; green = 2; blue = 131; // magenta
-    } else {
-      red   =   pow((co2 - 400), 2) / 10000;
-      green = - pow((co2 - 400), 2) / 4500 + 255;
-    }
-  } else {
-    if (co2 < 600) {
-      green = 255;
-    } else if(co2 < 800) {
-      red = 60; green = 200;
-    } else if(co2 < 1000) {
-      red = 140; green = 120;
-    } else if(co2 < 1500) {
-      red = 200; green = 60;
-    } else if(co2 < 2000) {
-      red = 255;
-    } else {
-      red = 216; green = 2; blue = 131; // magenta
-    }
-  }
-  if (red < 0) red = 0;
-  if (red > 255) red = 255;
-  if (green < 0) green = 0;
-  if (green > 255) green = 255;
-  if (blue < 0) blue = 0;
-  if (blue > 255) blue = 255;
-
-  red =   (int)(red   * (ledbrightness / 100.0));
+  red   = (int)(red   * (ledbrightness / 100.0));
   green = (int)(green * (ledbrightness / 100.0));
-  blue =  (int)(blue  * (ledbrightness / 100.0));
+  blue  = (int)(blue  * (ledbrightness / 100.0));
 
   strip.setPixelColor(0, green, red, blue);
   strip.show();
@@ -293,11 +414,11 @@ void lowBatteryMode() {
   rtc_gpio_pulldown_dis(USB_PRESENT);
   esp_sleep_enable_ext0_wakeup(USB_PRESENT, 1);
 
-  esp_sleep_pd_config(ESP_PD_DOMAIN_RTC_PERIPH, ESP_PD_OPTION_AUTO);   // RTC IO, sensors and ULP co-processor
-  esp_sleep_pd_config(ESP_PD_DOMAIN_RTC_SLOW_MEM, ESP_PD_OPTION_AUTO); // RTC slow memory: auto
-  esp_sleep_pd_config(ESP_PD_DOMAIN_RTC_FAST_MEM, ESP_PD_OPTION_OFF);  // RTC fast memory
-  esp_sleep_pd_config(ESP_PD_DOMAIN_XTAL, ESP_PD_OPTION_OFF);          // XTAL oscillator
-  esp_sleep_pd_config(ESP_PD_DOMAIN_RTC8M, ESP_PD_OPTION_OFF);         // CPU core
+  esp_sleep_pd_config(ESP_PD_DOMAIN_RTC_PERIPH, ESP_PD_OPTION_AUTO);    // RTC IO, sensors and ULP co-processor
+  esp_sleep_pd_config(ESP_PD_DOMAIN_RTC_SLOW_MEM, ESP_PD_OPTION_AUTO);  // RTC slow memory: auto
+  esp_sleep_pd_config(ESP_PD_DOMAIN_RTC_FAST_MEM, ESP_PD_OPTION_OFF);   // RTC fast memory
+  esp_sleep_pd_config(ESP_PD_DOMAIN_XTAL, ESP_PD_OPTION_OFF);           // XTAL oscillator
+  esp_sleep_pd_config(ESP_PD_DOMAIN_RTC8M, ESP_PD_OPTION_OFF);          // CPU core
   esp_sleep_pd_config(ESP_PD_DOMAIN_VDDSDIO, ESP_PD_OPTION_OFF);
   esp_deep_sleep_start();
 }
@@ -326,19 +447,19 @@ void goto_deep_sleep(int ms) {
   /* Wakeup by IO0 button */
   rtc_gpio_pullup_en(BUTTON);
   rtc_gpio_pulldown_dis(BUTTON);
-  esp_sleep_enable_ext1_wakeup(0x1,ESP_EXT1_WAKEUP_ALL_LOW); // 2^0 = GPIO_NUM_0 = BUTTON
+  esp_sleep_enable_ext1_wakeup(0x1, ESP_EXT1_WAKEUP_ALL_LOW);  // 2^0 = GPIO_NUM_0 = BUTTON
 
   /* Keep LED enabled */
   if (LEDonBattery) gpio_hold_en(LED_POWER);
   else gpio_hold_dis(LED_POWER);
-  
+
   comingFromDeepSleep = true;
   esp_deep_sleep_start();
 }
 
-static void usbEventCallback(void* arg, esp_event_base_t event_base, int32_t event_id, void* event_data){
-  if(event_base == ARDUINO_USB_EVENTS){
-    switch (event_id){
+static void usbEventCallback(void* arg, esp_event_base_t event_base, int32_t event_id, void* event_data) {
+  if (event_base == ARDUINO_USB_EVENTS) {
+    switch (event_id) {
       case ARDUINO_USB_STARTED_EVENT:
         USB_ACTIVE = true;
         break;
@@ -362,7 +483,7 @@ void goto_light_sleep(int ms) {
   comingFromDeepSleep = false;
 
   if (useWiFi || TEST_MODE || USB_ACTIVE) {
-    for (int i=0; i<(ms/100); i++) {
+    for (int i = 0; i < (ms / 100); i++) {
       if (digitalRead(BUTTON) == 0) {
         handleButtonPress();
         return;
@@ -392,19 +513,19 @@ float readBatteryVoltage() {
   // IO5 for voltage divider measurement
   float voltage;
   if (HWSubRev == 2) voltage = (analogRead(BATTERY_VOLTAGE) * 3.33) / 5358.0;
-  else               voltage = (analogRead(BATTERY_VOLTAGE) * 3.33) / 5084.0 + 0.02;
+  else voltage = (analogRead(BATTERY_VOLTAGE) * 3.33) / 5084.0 + 0.02;
 
   if ((voltage > maxBatteryVoltage) && (voltage < 4.2) && (digitalRead(USB_PRESENT) == LOW)) {
-     maxBatteryVoltage = voltage;
-     preferences.begin("co2-sensor", false);
-     preferences.putFloat("MBV", voltage); // save maxBatteryVoltage
-     preferences.end();
+    maxBatteryVoltage = voltage;
+    preferences.begin("co2-sensor", false);
+    preferences.putFloat("MBV", voltage);  // save maxBatteryVoltage
+    preferences.end();
   }
   return voltage;
 }
 
 uint8_t calcBatteryPercentage(float voltage) {
-  voltage += (4.2 - maxBatteryVoltage); // in field calibration
+  voltage += (4.2 - maxBatteryVoltage);  // in field calibration
 
   if (voltage <= 3.62)
     return 75 * pow((voltage - 3.2), 2.);
@@ -415,13 +536,13 @@ uint8_t calcBatteryPercentage(float voltage) {
 }
 
 void calibrate() {
-/* Only run this, if calibration is needed!
+  /* Only run this, if calibration is needed!
    let the Sensor run outside for 3+ minutes before.
  */
   displayCalibrationWarning();
   delay(500);
-  for (int i=0; i<180; i++) {
-    if (digitalRead(BUTTON) == 0) return; // abort
+  for (int i = 0; i < 180; i++) {
+    if (digitalRead(BUTTON) == 0) return;  // abort
     delay(1000);
   }
 
@@ -435,8 +556,8 @@ void calibrate() {
 
 #include "pictures.h"
 void rainbowMode() {
-  displayImage(gImage_rainbow); // gImage_santa
-  digitalWrite(LED_POWER, LOW); // LED ON
+  displayImage(gImage_rainbow);  // gImage_santa
+  digitalWrite(LED_POWER, LOW);  // LED ON
 
   // Santa
   /*for(int j = 0; j < 256; j++) {
@@ -457,10 +578,10 @@ void rainbowMode() {
     if (j == 255) j=0;
     if (digitalRead(BUTTON) == 0) return;
     delay(20);
-  }*/  
-  
-  // Rainbow 
-  for(int j = 0; j < 256; j++) {
+  }*/
+
+  // Rainbow
+  for (int j = 0; j < 256; j++) {
     int red = 1, green = 0, blue = 0;
 
     if (j < 85) {
@@ -476,29 +597,28 @@ void rainbowMode() {
 
     strip.setPixelColor(0, green, red, blue);
     strip.show();
-    if (j == 255) j=0;
+    if (j == 255) j = 0;
     if (digitalRead(BUTTON) == 0) return;
     delay(20);
   }
 }
 
-RTC_DATA_ATTR uint8_t hour = 0;
-RTC_DATA_ATTR uint8_t halfminute = 0;
-#define NUM_HOURS 16 // ESP32-S2 slow RTC memory limitation
-RTC_DATA_ATTR SensorData measurements[NUM_HOURS][120];
 void saveMeasurement(uint16_t co2, float temperature, float humidity) {
   if (halfminute == 120) {
-    halfminute=0;
+    halfminute = 0;
     hour++;
   }
-  if (hour == NUM_HOURS) {
-    for (int i=0; i<NUM_HOURS-1; ++i) memcpy(measurements[i], measurements[i + 1], sizeof(SensorData) * 120);  // destination, source
-    hour = NUM_HOURS-1;
+  if (hour == 24) {
+    for (int i = 0; i < 23; ++i) memcpy(co2measurements[i], co2measurements[i + 1], sizeof(uint16_t) * 120);  // destination, source
+    for (int i = 0; i < 23; ++i) memcpy(tempHumMeasurements[i], tempHumMeasurements[i + 1], sizeof(tempHumData) * 40);
+    hour = 23;
   }
 
-  measurements[hour][halfminute].co2 = co2;
-  measurements[hour][halfminute].temperature = (uint16_t)temperature*10;
-  measurements[hour][halfminute].humidity = (uint8_t)humidity;
+  co2measurements[hour][halfminute] = co2;
+  if (!(halfminute % 3)) {  // every 1.5 minutes
+    tempHumMeasurements[hour][halfminute / 3].temperature = (uint16_t)(temperature * 10);
+    tempHumMeasurements[hour][halfminute / 3].humidity = (uint8_t)humidity;
+  }
   halfminute++;
 }
 
@@ -512,7 +632,7 @@ void handleWiFiChange() {
     WiFi.disconnect();
     WiFi.mode(WIFI_OFF);
     esp_wifi_stop();
-    goto_light_sleep(1); // clear ESP_SLEEP_WAKEUP_GPIO
+    goto_light_sleep(1);  // clear ESP_SLEEP_WAKEUP_GPIO
   }
 }
 
@@ -526,15 +646,15 @@ void toggleWiFi() {
   delay(500);
 
   bool ip_shown = false;
-  while (digitalRead(BUTTON) != 0) { // wait for button press
+  while (digitalRead(BUTTON) != 0) {  // wait for button press
     delay(100);
     wifiManager.process();
     if (!ip_shown && WiFi.status() == WL_CONNECTED) {
       delay(100);
       ip_shown = true;
-      displayWiFi(useWiFi); // to update displayed IP
+      displayWiFi(useWiFi);  // to update displayed IP
     }
-    if (BatteryMode && (digitalRead(USB_PRESENT) == HIGH)) { // power got connected
+    if (BatteryMode && (digitalRead(USB_PRESENT) == HIGH)) {  // power got connected
       BatteryMode = false;
       handleWiFiChange();
     }
@@ -543,11 +663,11 @@ void toggleWiFi() {
 
 void startWiFi() {
   wifiManager.setSaveConfigCallback([]() {
-#ifdef MQTT 
-   saveCredentials();
+#ifdef MQTT
+    saveCredentials();
 #endif
   });
-  
+
   wifiManager.setSaveConfigCallback(saveConfigCallback);
 #ifdef MQTT
   wifiManager.addParameter(&custom_mqtt_server);
@@ -557,21 +677,22 @@ void startWiFi() {
 
   char Hostname[28];
   snprintf(Hostname, 28, "OpenCO2-Sensor%llX", ESP.getEfuseMac());
-  WiFi.setHostname(Hostname); // hostname when connected to home network
+  WiFi.setHostname(Hostname);  // hostname when connected to home network
 
   wifiManager.setConfigPortalBlocking(false);
-  wifiManager.autoConnect("OpenCO2 Sensor");  // name of broadcasted SSID  
+  wifiManager.autoConnect("OpenCO2 Sensor");  // name of broadcasted SSID
 
 #ifdef MQTT
   loadCredentials();
-  if(mqtt_server[0] != '\0' && mqtt_port[0] != '\0'){
-      mqttClient.connect(mqtt_server, (int)mqtt_port);
+  if (mqtt_server[0] != '\0' && mqtt_port[0] != '\0') {
+    mqttClient.connect(mqtt_server, (int)mqtt_port);
   }
 #endif /* MQTT */
 
 #ifdef airgradient
-  server.on("/", HandleRoot);
+  server.on("/", HandleRootClient);
   server.on("/metrics", HandleRoot);
+  server.on("/favicon.ico", handleFavicon);
   server.onNotFound(HandleNotFound);
   server.begin();
   Serial.println("HTTP server started at ip " + WiFi.localIP().toString() + ":" + String(port));
@@ -583,7 +704,7 @@ void startWiFi() {
 }
 
 float currentTemp = temperatureRead();
-RTC_DATA_ATTR float ESP32temps[10] = {currentTemp,currentTemp,currentTemp,currentTemp,currentTemp,currentTemp,currentTemp,currentTemp,currentTemp,currentTemp};
+RTC_DATA_ATTR float ESP32temps[10] = { currentTemp, currentTemp, currentTemp, currentTemp, currentTemp, currentTemp, currentTemp, currentTemp, currentTemp, currentTemp };
 RTC_DATA_ATTR float sumTemp = currentTemp * 10;
 RTC_DATA_ATTR uint8_t indexTemp = 0;
 void measureESP32temperature() {
@@ -602,7 +723,7 @@ void setup() {
   DEV_Module_Init();
 
   /* scd4x */
-  Wire.begin(33, 34); // green, yellow
+  Wire.begin(33, 34);  // green, yellow
   scd4x.begin(Wire);
 
   USB.onEvent(usbEventCallback);
@@ -619,7 +740,7 @@ void setup() {
 
   strip.begin();
   if (esp_sleep_get_wakeup_cause() == ESP_SLEEP_WAKEUP_EXT1) {
-    if (TEST_MODE) displayWelcome(); // exit TEST_MODE via IO button
+    if (TEST_MODE) displayWelcome();  // exit TEST_MODE via IO button
     handleButtonPress();
   }
 
@@ -627,7 +748,7 @@ void setup() {
     delay(1);
     setLED(co2);
 
-    scd4x.stopPeriodicMeasurement();   // stop low power measurement
+    scd4x.stopPeriodicMeasurement();  // stop low power measurement
     scd4x.setTemperatureOffset(getTempOffset());
     scd4x.startPeriodicMeasurement();
     /* Wait for co2 measurement */
@@ -640,7 +761,7 @@ void setup() {
 
 void loop() {
   if (!useWiFi && esp_sleep_get_wakeup_cause() == ESP_SLEEP_WAKEUP_GPIO) handleButtonPress();
-  updateBatteryMode(); // check again in USB Power mode
+  updateBatteryMode();  // check again in USB Power mode
   measureESP32temperature();
 
   if (useWiFi && !BatteryMode) {
@@ -655,7 +776,7 @@ void loop() {
   if (ready_error || !isDataReady) {
     if (BatteryMode) goto_deep_sleep(DEEP_SLEEP_TIME);
     else goto_light_sleep(LIGHT_SLEEP_TIME);
-    return; // otherwise continues running!
+    return;  // otherwise continues running!
   }
 
   // Read co2 measurement
@@ -668,10 +789,10 @@ void loop() {
     displayWriteError(errorMessage);
   } else {
     extern uint16_t refreshes;
-    if (BatteryMode || (refreshes%6 == 1)) saveMeasurement(new_co2, new_temperature, humidity);
+    if (BatteryMode || (refreshes % 6 == 1)) saveMeasurement(new_co2, new_temperature, humidity);
     /* don't update in Battery mode, unless CO2 has changed by 3% or temperature by 0.5°C */
     if (!TEST_MODE && BatteryMode && comingFromDeepSleep) {
-      if ((abs(new_co2 - co2) < (0.03*co2)) && (fabs(new_temperature - temperature) < 0.5)) {
+      if ((abs(new_co2 - co2) < (0.03 * co2)) && (fabs(new_temperature - temperature) < 0.5)) {
         goto_deep_sleep(DEEP_SLEEP_TIME);
       }
     }

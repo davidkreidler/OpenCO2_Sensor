@@ -363,8 +363,8 @@ void displayWriteMeasuerments(uint16_t co2, float temperature, float humidity) {
     if      (co2 > 9999) Paint_DrawNum(27, 78, co2, &mid, BLACK, WHITE);
     else if (co2 < 1000) Paint_DrawNum(30, 65, co2, &big, BLACK, WHITE);
     else                 Paint_DrawNum( 6, 65, co2, &big, BLACK, WHITE);
-    Paint_DrawString_EN(100, 150, "CO", &Font24, WHITE, BLACK);
-    Paint_DrawNum(131, 160, 2, &Font20, BLACK, WHITE);
+    /*Paint_DrawString_EN(100, 150, "CO", &Font24, WHITE, BLACK);
+    Paint_DrawNum(131, 160, 2, &Font20, BLACK, WHITE);*/
     Paint_DrawString_EN(144, 150, "ppm", &Font24, WHITE, BLACK);
 
     /* temperature */
@@ -463,10 +463,40 @@ void draw_qr_code(const uint8_t * qrcode) {
   }
 }
 
-void calculateStats(int* min, int* max, int* avg, int (*getValue)(const SensorData*)) {
+void calculateTempHumStats(int* mintemp, int* maxtemp, int* avgtemp, int* minhum, int* maxhum, int* avghum) {
+  int i, j, numEnties, sumtemp = 0, sumhum = 0;
+  int value = tempHumMeasurements[0][0].temperature;
+  *mintemp = value;
+  *maxtemp = value;
+
+  value = tempHumMeasurements[0][0].humidity;
+  *minhum = value;
+  *maxhum = value;
+
+  for (i=0; i<=hour; i++) {
+    if (i != hour) numEnties = 40;
+    else numEnties = ceil(halfminute/3.0);
+    for (j=0; j<numEnties; j++) {
+      value = tempHumMeasurements[i][j].temperature;
+      if (value < *mintemp) *mintemp = value;
+      if (value > *maxtemp) *maxtemp = value;
+      sumtemp += value;
+
+      value = tempHumMeasurements[i][j].humidity;
+      if (value < *minhum) *minhum = value;
+      if (value > *maxhum) *maxhum = value;
+      sumhum += value;
+    }
+  }
+
+  *avgtemp = sumtemp / (40.0 * hour + ceil(halfminute / 3.0));
+  *avghum  = sumhum  / (40.0 * hour + ceil(halfminute / 3.0));
+}
+
+void calculateStatsCO2(int* min, int* max, int* avg) {
   extern uint8_t halfminute, hour;
   int i, j, numEnties, sum = 0;
-  int value = getValue(&measurements[0][0]);
+  int value = co2measurements[0][0];
   *min = value;
   *max = value;
 
@@ -474,7 +504,7 @@ void calculateStats(int* min, int* max, int* avg, int (*getValue)(const SensorDa
     if (i != hour) numEnties = 120;
     else numEnties = halfminute;
     for (j=0; j<numEnties; j++) {
-      value = getValue(&measurements[i][j]);
+      value = co2measurements[i][j];
       if (value < *min) *min = value;
       if (value > *max) *max = value;
       sum += value;
@@ -483,14 +513,11 @@ void calculateStats(int* min, int* max, int* avg, int (*getValue)(const SensorDa
 
   *avg = sum / (120.0 * hour + halfminute);
 }
-int getCO2        (const SensorData* data) { return data->co2; }
-int getHumidity   (const SensorData* data) { return data->humidity; }
-int getTemperature(const SensorData* data) { return data->temperature; }
 
 void displayCO2HistoryGraph() {
   extern uint8_t halfminute, hour;
   int min, max, avg;
-  calculateStats(&min, &max, &avg, getCO2);
+  calculateStatsCO2(&min, &max, &avg);
   float yscale = 184.0 / (max - min);
   int numMeasurements = 120 * hour + halfminute;
   float stepsPerPixel = numMeasurements / 200.0;
@@ -510,9 +537,9 @@ void displayCO2HistoryGraph() {
   Paint_DrawString_EN(11, 200-16, duration, &Font16, WHITE, BLACK);
   Paint_DrawString_EN(200-11*3, 200-16, "now", &Font16, WHITE, BLACK);
 
-  int privY = measurements[0][0].co2;
+  int privY = co2measurements[0][0];
   for (int x=1; x<200; x++) {
-    int y = measurements[(int)((x * stepsPerPixel) / 120.0)][(int)(x * stepsPerPixel) % 120].co2;
+    int y = co2measurements[(int)((x * stepsPerPixel) / 120.0)][(int)(x * stepsPerPixel) % 120];
     y = 200.0 - ((y - min) * yscale);
     Paint_DrawLine(x-1, privY, x, y, BLACK, DOT_PIXEL_2X2, LINE_STYLE_SOLID);
     privY = y;
@@ -526,13 +553,12 @@ void displayCO2HistoryGraph() {
 void displayTempHumHistoryGraph() {
   extern uint8_t halfminute, hour;
   int mintemp, maxtemp, avgtemp, minhum, maxhum, avghum;
-  calculateStats(&mintemp, &maxtemp, &avgtemp, getTemperature);
-  calculateStats(&minhum, &maxhum, &avghum, getHumidity);
+  calculateTempHumStats(&mintemp, &maxtemp, &avgtemp, &minhum, &maxhum, &avghum);
 
   float hight = 200.0 - 2*16.0;
   float yscaletemp = hight / (maxtemp - mintemp);
   float yscalehum = hight / (maxhum - minhum);
-  int numMeasurements = 120 * hour + halfminute;
+  int numMeasurements = 40 * hour + ceil(halfminute / 3.0);
   float stepsPerPixel = numMeasurements / 200.0;
 
   Paint_Clear(WHITE);
@@ -562,12 +588,12 @@ void displayTempHumHistoryGraph() {
   Paint_DrawString_EN(11, 200-16, duration, &Font16, WHITE, BLACK);
   Paint_DrawString_EN(200-11*3, 200-16, "now", &Font16, WHITE, BLACK);
 
-  int privYtemp = measurements[0][0].temperature;
-  int privYhum = measurements[0][0].humidity;
+  int privYtemp = tempHumMeasurements[0][0].temperature;
+  int privYhum = tempHumMeasurements[0][0].humidity;
 
   for (int x=1; x<200; x++) {
-    int ytemp = measurements[(int)((x * stepsPerPixel) / 120.0)][(int)(x * stepsPerPixel) % 120].temperature;
-    int yhum = measurements[(int)((x * stepsPerPixel) / 120.0)][(int)(x * stepsPerPixel) % 120].humidity;
+    int ytemp = tempHumMeasurements[(int)((x * stepsPerPixel) / 40.0)][(int)(x * stepsPerPixel) % 40].temperature;
+    int yhum =  tempHumMeasurements[(int)((x * stepsPerPixel) / 40.0)][(int)(x * stepsPerPixel) % 40].humidity;
     ytemp = 200.0 - ((ytemp - mintemp) * yscaletemp);
     yhum = 200.0 - ((yhum - minhum) * yscalehum);
     Paint_DrawLine(x-1, privYtemp, x, ytemp, BLACK, DOT_PIXEL_2X2, LINE_STYLE_SOLID);
@@ -597,7 +623,7 @@ void displayHistory(uint8_t qrcodeNumber) {
 
   for (int i=0; i<numEnties; i++) {
     char tempStr[6];
-    snprintf(tempStr, sizeof(tempStr), "%d", measurements[qrcodeNumber][i].co2);
+    snprintf(tempStr, sizeof(tempStr), "%d", co2measurements[qrcodeNumber][i]);
 
     if (i == 0) snprintf(buffer, sizeof(buffer), "%s", tempStr);
     else snprintf(buffer + strlen(buffer), sizeof(buffer) - strlen(buffer), " %s", tempStr);
@@ -619,19 +645,23 @@ void displayHistory(uint8_t qrcodeNumber) {
 //uint8_t qrcodeNumber = 0;
 void history() {
   // DEMO DATA:
-  /*hour = 2;
+  /*
+  hour = 2;
+  halfminute = 120;
   for (int i=0; i<120; i++) {
-    measurements[0][i].co2 = 400+i;
-    measurements[1][i].co2 = 520+i;
-    measurements[2][i].co2 = 1000+i;
-    measurements[0][i].temperature = 200+i;
-    measurements[1][i].temperature = 320-i;
-    measurements[2][i].temperature = 10+i;
-    measurements[0][i].humidity = 20+i/2;
-    measurements[1][i].humidity = 80-i/2;
-    measurements[2][i].humidity = 10+i/2;
+    co2measurements[0][i] = 400+i;
+    co2measurements[1][i] = 520+i;
+    co2measurements[2][i] = 1000+i;
   }
-  halfminute = 120;*/
+  for (int i=0; i<40; i++) {
+    tempHumMeasurements[0][i].temperature = 200+i;
+    tempHumMeasurements[1][i].temperature = 320-i;
+    tempHumMeasurements[2][i].temperature = 10+i;
+    tempHumMeasurements[0][i].humidity = 20+i/2;
+    tempHumMeasurements[1][i].humidity = 80-i/2;
+    tempHumMeasurements[2][i].humidity = 10+i/2;
+  }
+  */
   uint16_t mspressed;
   unsigned long historyStartTime = millis();
   uint8_t qrcodeNumber = hour+2; // start at CO2 graph
@@ -935,9 +965,9 @@ void displayWiFiStrengh() {
   
   int32_t signalStrength = WiFi.RSSI();
                                                                  //xStart,yStart,W_Image,H_Image 
-  if        (signalStrength > -55) { Paint_DrawImage(wifiFullIcon,   142, 101, 40, 40); 
-  } else if (signalStrength > -70) { Paint_DrawImage(wifiMediumIcon, 142, 101, 40, 40);
-  } else {                           Paint_DrawImage(wifiLowIcon,    142, 101, 40, 40); }
+  if      (signalStrength > -55) { Paint_DrawImage(wifiFullIcon,   5, 74, 40, 40); }
+  else if (signalStrength > -70) { Paint_DrawImage(wifiMediumIcon, 5, 74, 40, 40); }
+  else {                           Paint_DrawImage(wifiLowIcon,    5, 74, 40, 40); }
 
   /* time */
   struct tm timeinfo;
@@ -948,11 +978,11 @@ void displayWiFiStrengh() {
   char minute[3];
   sprintf(hour, "%02d", timeinfo.tm_hour);
   sprintf(minute, "%02d", timeinfo.tm_min);
-  Paint_DrawString_EN(1, 150, hour, &sml, WHITE, BLACK);
+  Paint_DrawString_EN(1, 150, hour, &mid, WHITE, BLACK);
                 // XCenter,YCenter,radius
-  Paint_DrawCircle(1+13*2+3, 150+10, 2, BLACK, DOT_PIXEL_1X1, DRAW_FILL_FULL);
-  Paint_DrawCircle(1+13*2+3, 150+20, 2, BLACK, DOT_PIXEL_1X1, DRAW_FILL_FULL);
-  Paint_DrawString_EN(1+13*2+6, 150, minute, &sml, WHITE, BLACK);
+  Paint_DrawCircle(1+29*2+4, 150+15, 3, BLACK, DOT_PIXEL_1X1, DRAW_FILL_FULL);
+  Paint_DrawCircle(1+29*2+4, 150+29, 3, BLACK, DOT_PIXEL_1X1, DRAW_FILL_FULL);
+  Paint_DrawString_EN(1+29*2+9, 150, minute, &mid, WHITE, BLACK);
 }
 
 void displayinfo() {
