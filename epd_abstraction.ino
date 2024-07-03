@@ -1045,6 +1045,17 @@ void displayinfo() {
   Paint_DrawString_EN(1, 129, "USB_ACTIVE:", &Font16, WHITE, BLACK);
   Paint_DrawString_EN(122, 129, USB_ACTIVE? "yes":"no", &Font16, WHITE, BLACK);
 
+  // only needed for debugging. This interrupts the SCD40
+  /*float tOffset;
+  scd4x.stopPeriodicMeasurement();
+  scd4x.getTemperatureOffset(tOffset);
+  if (BatteryMode) scd4x.startLowPowerPeriodicMeasurement();
+  else scd4x.startPeriodicMeasurement();
+  Paint_DrawString_EN(1, 145, "T_offset:", &Font16, WHITE, BLACK);
+  char offset[20];
+  sprintf(offset, "%.1f", tOffset);
+  Paint_DrawString_EN(122, 145, offset, &Font16, WHITE, BLACK);*/
+
   updateDisplay();
 }
 

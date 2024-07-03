@@ -290,7 +290,7 @@ void loadCredentials() {
 #endif /* MQTT */
 
 float getTempOffset() {
-  if (useWiFi) return 13.0;
+  if (useWiFi) return 12.2;
   else return 4.4;
 }
 
@@ -774,7 +774,7 @@ void loop() {
   bool isDataReady = false;
   uint16_t ready_error = scd4x.getDataReadyFlag(isDataReady);
   if (ready_error || !isDataReady) {
-    if (BatteryMode) goto_deep_sleep(DEEP_SLEEP_TIME);
+    if (BatteryMode && comingFromDeepSleep) goto_deep_sleep(DEEP_SLEEP_TIME);
     else goto_light_sleep(LIGHT_SLEEP_TIME);
     return;  // otherwise continues running!
   }
