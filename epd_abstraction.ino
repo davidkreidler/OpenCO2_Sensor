@@ -94,6 +94,7 @@ void handleButtonPress() {
           case RAINBOW:
             rainbowMode();
             setLED(co2);
+            refreshes = 1;
             break;
         }
         clearMenu();
@@ -372,7 +373,7 @@ void displayWriteMeasuerments(uint16_t co2, float temperature, float humidity) {
     if (temperature < 10.0f) Paint_DrawNum(30, 5, temperature, &mid, BLACK, WHITE);
     else                     Paint_DrawNum( 1, 5, temperature, &mid, BLACK, WHITE);
     int offset = 0;
-    if (temperature >= 100) offset = 29; // for Fahrenheit
+    if (temperature >= 100) offset = 29; // for Fahrenheit > 37,7 °C
 
     Paint_DrawString_EN(60+offset, 4, useFahrenheit? "*F" : "*C", &bahn_sml, WHITE, BLACK);
     Paint_DrawString_EN(60+offset, 32, ",", &sml, WHITE, BLACK);
@@ -646,20 +647,18 @@ void displayHistory(uint8_t qrcodeNumber) {
 void history() {
   // DEMO DATA:
   /*
-  hour = 2;
+  hour = 23;
   halfminute = 120;
   for (int i=0; i<120; i++) {
-    co2measurements[0][i] = 400+i;
-    co2measurements[1][i] = 520+i;
-    co2measurements[2][i] = 1000+i;
+    for (int j=0; j<24; j++) {
+      co2measurements[j][i] = 400+i;
+    }
   }
   for (int i=0; i<40; i++) {
-    tempHumMeasurements[0][i].temperature = 200+i;
-    tempHumMeasurements[1][i].temperature = 320-i;
-    tempHumMeasurements[2][i].temperature = 10+i;
-    tempHumMeasurements[0][i].humidity = 20+i/2;
-    tempHumMeasurements[1][i].humidity = 80-i/2;
-    tempHumMeasurements[2][i].humidity = 10+i/2;
+    for (int j=0; j<24; j++) {
+      tempHumMeasurements[j][i].temperature = 200+i;
+      tempHumMeasurements[j][i].humidity = 20+i/2;
+    }
   }
   */
   uint16_t mspressed;

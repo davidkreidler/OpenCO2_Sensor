@@ -10,7 +10,7 @@
    - WiFiManager: https://github.com/tzapu/WiFiManager
    - ArduinoMqttClient (if MQTT is defined)
 */
-#define VERSION "v5.0"
+#define VERSION "v5.1"
 
 #define HEIGHT_ABOVE_SEA_LEVEL 50             // Berlin
 #define TZ_DATA "CET-1CEST,M3.5.0,M10.5.0/3"  // Europe/Berlin time zone from https://github.com/nayarsystems/posix_tz_db/blob/master/zones.csv
@@ -166,7 +166,10 @@ String getHexColors(uint16_t co2) {
   return String(hexString);
 }
 
-String GenerateHtml() {
+void HandleRootClient() {
+  server.setContentLength(CONTENT_LENGTH_UNKNOWN);
+  server.send(200, "text/html", "");
+
   String message = "<!DOCTYPE html>\n <html>\n";
   message += "<head>\n <title>OpenCO2 Sensor</title>\n <link rel='icon' href='/favicon.ico' type='image/png' />\n <meta http-equiv='refresh' content='300'>\n";
   message += "<style> .container { display: flex; gap: 15px; } .rounded-box { font-family: Verdana, Geneva, sans-serif; width: 400px; height: 300px; border-radius: 25px; position: relative; display: flex; flex-direction: column; justify-content: center; font-size: 4em; border: 4px solid #ccc; } .descr-text { position: absolute; top: 10px; left: 10px; font-size: 0.5em; } .center-text { font-size: 1.5em; text-align: center; } .unit-text { font-size: 0.5em; } </style>";
@@ -180,73 +183,100 @@ String GenerateHtml() {
   if (useFahrenheit) sprintf(tempString, "%.1f",(temperature * 1.8f) + 32.0f);  // convert to °F
   else               sprintf(tempString, "%.1f", temperature);
   message += "<div class='rounded-box'><div class='descr-text'>Temperature</div><div class='center-text'><b>" + String(tempString) + "</b><div class='unit-text'>";
-  if (useFahrenheit) message += "*F";
-  else               message += "*C";
-  message += "</div></div></div>\n";
+  message += String(useFahrenheit? "*F": "*C") + "</div></div></div>\n";
   message += "<div class='rounded-box'><div class='descr-text'>Humidity</div><div class='center-text'><b>" + String((int)humidity) + "</b><div class='unit-text'>%</div></div></div></div>\n";
   message += "<div id='CO2Plot' style='width:100%;max-width:1400px'></div>\n";
   message += "<div id='TempHumPlot' style='width:100%;max-width:1400px'></div>\n";
   message += "<script>\n";
 
-  String xValues = "", yValues = "";
-  char time[80];
+  char time[20];
   struct tm timeinfo;
   getLocalTime(&timeinfo);
+  strftime(time, 20, "%Y-%m-%dT%H:%M:%S", &timeinfo);
+  message += "const endTime = new Date('" + String(time) + "').getTime();\n";
+
   time_t now = mktime(&timeinfo);
-  for (int i = (hour * 120 + halfminute) - 1; i >= 0; i--) {
-    time_t timestamp = now - i * 30;
-    struct tm* timeinfo = localtime(&timestamp);
-    strftime(time, 80, "%Y-%m-%d %H:%M:%S", timeinfo);
-    xValues += "'" + String(time) + "',";
-  }
+  time_t timestamp = now - hour*60*60 - halfminute*30;
+  struct tm* timeinfo2 = localtime(&timestamp);
+  strftime(time, 20, "%Y-%m-%dT%H:%M:%S", timeinfo2);
+  message += "const startTime = new Date('" + String(time) + "').getTime();\n";
+  message += "const numPoints = " + String(hour*120 + halfminute) + ";\n";
+
+  message += "function generateValues(start, end, numPoints) { let values = []; let step = (end - start) / (numPoints - 1); for (let i = 0; i < numPoints; i++) { values.push(start + (step * i));} return values;}\n";
+  message += "let times = generateValues(startTime, endTime, numPoints).map(time => new Date(time));\n";
+  message += "const yValues = [";
+  server.sendContent(message);
+
+  const size_t bufferSize = 2048;
+  String Buffer, Element;
+  Buffer.reserve(bufferSize);
   int i, j, numEnties;
   for (i = 0; i <= hour; i++) {
     if (i != hour) numEnties = 120;
     else numEnties = halfminute;
     for (j = 0; j < numEnties; j++) {
-      yValues += String(co2measurements[i][j]) + ",";
+      Element = String(co2measurements[i][j]) + ",";
+      if (Buffer.length() + Element.length() > bufferSize) {
+        server.sendContent(Buffer);
+        Buffer = "";
+      }
+      Buffer += Element;
     }
   }
-  message += "const xValues = [" + xValues + "];\n";
-  message += "const yValues = [" + yValues + "];\n";
-  message += "const data = [{x:xValues, y:yValues, mode:'lines'}];\n";
+  server.sendContent(Buffer);
+
+  message = "];\n";
+  message += "const data = [{x:times, y:yValues, mode:'lines'}];\n";
   message += "const layout = {yaxis: { title: 'CO2 (ppm)'}, title: 'History'};\n";
   message += "Plotly.newPlot('CO2Plot', data, layout);\n";
+  server.sendContent(message);
 
-  String x1Values = "", y1Values = "", y2Values = "";
-  getLocalTime(&timeinfo);
-  now = mktime(&timeinfo);
-  for (int i = (hour * 40 + ceil(halfminute / 3.0)) - 1; i >= 0; i--) {
-    time_t timestamp = now - i * 90;
-    struct tm* timeinfo = localtime(&timestamp);
-    strftime(time, 80, "%Y-%m-%d %H:%M:%S", timeinfo);
-    x1Values += "'" + String(time) + "',";
-  }
+  Buffer = "const y1Values = [";
   for (i = 0; i <= hour; i++) {
     if (i != hour) numEnties = 40;
     else numEnties = ceil(halfminute / 3.0);
     for (j = 0; j < numEnties; j++) {
       float temp = tempHumMeasurements[i][j].temperature / 10.0;
-      if (useFahrenheit) temp = (temp * 1.8f) + 32.0f;  // convert to °F
-      y1Values += String(temp) + ",";
-      y2Values += String(tempHumMeasurements[i][j].humidity) + ",";
+      if (useFahrenheit) sprintf(tempString, "%.1f",(temp * 1.8f) + 32.0f);  // convert to °F
+      else               sprintf(tempString, "%.1f", temp);
+      Element = String(tempString) + ",";
+      if (Buffer.length() + Element.length() > bufferSize) {
+        server.sendContent(Buffer);
+        Buffer = "";
+      }
+      Buffer += Element;
     }
   }
-  message += "const data2 = [{x: [" + x1Values + "], y: [" + y1Values +"], name: 'Temperature', mode:'lines'}, ";
-  message += "{x: [" + x1Values + "], y: [" + y2Values + "], name: 'Humidity', yaxis: 'y2', mode:'lines'}];\n";
-  message += "const layout2 = { showlegend: false, yaxis: {title: 'Temperature (";
-  if (useFahrenheit) message += "*F";
-  else               message += "*C";
+  server.sendContent(Buffer);
+
+  Buffer = "];\nconst y2Values = [";
+  for (i = 0; i <= hour; i++) {
+    if (i != hour) numEnties = 40;
+    else numEnties = ceil(halfminute / 3.0);
+    for (j = 0; j < numEnties; j++) {
+      Element = String(tempHumMeasurements[i][j].humidity) + ",";
+      if (Buffer.length() + Element.length() > bufferSize) {
+        server.sendContent(Buffer);
+        Buffer = "";
+      }
+      Buffer += Element;
+    }
+  }
+  server.sendContent(Buffer);
+
+  message = "];\nconst numPoints2 = " + String(int(hour*40 + ceil(halfminute/3.0))) + ";\n";
+  message += "let times2 = generateValues(startTime, endTime, numPoints2).map(time => new Date(time));\n";
+  message += "const data2 = [{x: times2, y: y1Values, name: 'Temperature', mode:'lines'}, ";
+  message += "{x: times2, y: y2Values, name: 'Humidity', yaxis: 'y2', mode:'lines'}];\n";
+  message += "const layout2 = { showlegend: false, yaxis: {title: 'Temperature (" + String(useFahrenheit? "*F" : "*C") ;
   message += ")'}, yaxis2: { title: 'Humidity (%)', overlaying: 'y', side: 'right'}};\n";
   message += "Plotly.newPlot('TempHumPlot', data2, layout2);\n";
 
-  message += "</script>\n </body>\n </html>\n";
-  return message;
+  message += "</script>\n</body>\n</html>\n";
+  server.sendContent(message);
+  server.client().stop();
 }
 
-void HandleRootClient() {
-  server.send(200, "text/html", GenerateHtml());
-}
 void HandleRoot() {
   server.send(200, "text/plain", GenerateMetrics());
 }
@@ -648,7 +678,14 @@ void toggleWiFi() {
   bool ip_shown = false;
   while (digitalRead(BUTTON) != 0) {  // wait for button press
     delay(100);
-    wifiManager.process();
+    
+    if (useWiFi && !BatteryMode) {
+      if (WiFi.status() != WL_CONNECTED) wifiManager.process();
+#ifdef airgradient
+      if (WiFi.status() == WL_CONNECTED) server.handleClient();
+#endif /* airgradient */
+    }
+
     if (!ip_shown && WiFi.status() == WL_CONNECTED) {
       delay(100);
       ip_shown = true;
@@ -657,6 +694,7 @@ void toggleWiFi() {
     if (BatteryMode && (digitalRead(USB_PRESENT) == HIGH)) {  // power got connected
       BatteryMode = false;
       handleWiFiChange();
+      displayWiFi(useWiFi);
     }
   }
 }

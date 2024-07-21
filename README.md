@@ -54,6 +54,23 @@ Press the Menu button on the backside of the OpenCO2 Sensor. Select an option vi
 Enable Wi-Fi via the Menu button. When power is connected, an access point `OpenCO2 Sensor` is enabled. Connect to it and navigate to http://192.168.4.1 (it will open automatically on modern Smartphones). Insert your home Wi-Fi credentials under `Configure WiFi`. Choose your network name from the list in the top and insert the password. Click `Save`. The sensor will now be automatically connected. Navigate to IP:9925 to see current co2/temperature/humidity measurements.
 ![alt text](https://github.com/davidkreidler/OpenCO2_Sensor/raw/main/pictures/setup.jpg)
 
+# Machine-readable Measurements over WiFi  
+Connect the sensor to your Wi-Fi network and find out the IP of the sensor in your home network via the ui of your router or on the sensor itself via the button under Menu -> Info .
+`curl [IP]:9925/metrics`
+
+Result:
+```
+# HELP rco2 CO2 value, in ppm
+# TYPE rco2 gauge
+rco2{id="Open CO2 Sensor",mac="7C:DF:A1:96:B9:72"}571
+# HELP atmp Temperature, in degrees Celsius
+# TYPE atmp gauge
+atmp{id="Open CO2 Sensor",mac="7C:DF:A1:96:B9:72"}25.37
+# HELP rhum Relative humidity, in percent
+# TYPE rhum gauge
+rhum{id="Open CO2 Sensor",mac="7C:DF:A1:96:B9:72"}55.15
+```
+
 # AirGradient / Grafana
 
 Use [internet-pi](https://github.com/geerlingguy/internet-pi) to store the CO2 / Temperature / Humidity data on your Pi. First connect the OpenCO2 Sensor to your Wi-Fi network and follow the instructions https://www.youtube.com/watch?v=Cmr5VNALRAg Then download the https://raw.githubusercontent.com/davidkreidler/OpenCO2_Sensor/main/grafana_OpenCO2_Sensor.json and import it into Grafana.
@@ -68,7 +85,7 @@ Use [internet-pi](https://github.com/geerlingguy/internet-pi) to store the CO2 /
 # OTA Update
 
 Download `FIRMWARE.BIN` from the latest [release](https://github.com/davidkreidler/OpenCO2_Sensor/releases).
-Enable Wi-Fi via the Menu button, in an area where no previously known network is active. Connect power. Then connect to `OpenCO2 Sensor` and navigate to http://192.168.4.1 . Under `Update` select the `OpenCO2_Sensor.ino.bin` file and click `Update`. The Sensor will restart.
+Enable Wi-Fi via the Menu button, in an area where no previously known network is active. Connect power. Then connect to `OpenCO2 Sensor` and navigate to http://192.168.4.1 . Under `Update` select the `FIRMWARE.BIN` file and click `Update`. The Sensor will restart.
 ![alt text](https://github.com/davidkreidler/OpenCO2_Sensor/raw/main/pictures/OTA.jpg)
 
 # Update via USB (from an old release)
