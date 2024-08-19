@@ -465,63 +465,61 @@ void draw_qr_code(const uint8_t * qrcode) {
 }
 
 void calculateTempHumStats(int* mintemp, int* maxtemp, int* avgtemp, int* minhum, int* maxhum, int* avghum) {
-  int i, j, numEnties, sumtemp = 0, sumhum = 0;
-  int value = tempHumMeasurements[0][0].temperature;
+  int sumtemp = 0, sumhum = 0;
+  int value = getTempMeasurement(0);
   *mintemp = value;
   *maxtemp = value;
 
-  value = tempHumMeasurements[0][0].humidity;
+  value = getHumMeasurement(0);
   *minhum = value;
   *maxhum = value;
 
-  for (i=0; i<=hour; i++) {
-    if (i != hour) numEnties = 40;
-    else numEnties = ceil(halfminute/3.0);
-    for (j=0; j<numEnties; j++) {
-      value = tempHumMeasurements[i][j].temperature;
-      if (value < *mintemp) *mintemp = value;
-      if (value > *maxtemp) *maxtemp = value;
-      sumtemp += value;
+  uint16_t index;
+  if (overflow) index = NUM_MEASUREMENTS / 3;
+  else          index = ceil(currentIndex / 3.0);
+  for (int i=0; i<=index; i++) {
+    value = getTempMeasurement(i);
+    if (value < *mintemp) *mintemp = value;
+    if (value > *maxtemp) *maxtemp = value;
+    sumtemp += value;
 
-      value = tempHumMeasurements[i][j].humidity;
-      if (value < *minhum) *minhum = value;
-      if (value > *maxhum) *maxhum = value;
-      sumhum += value;
-    }
+    value = getHumMeasurement(i);
+    if (value < *minhum) *minhum = value;
+    if (value > *maxhum) *maxhum = value;
+    sumhum += value;
   }
 
-  *avgtemp = sumtemp / (40.0 * hour + ceil(halfminute / 3.0));
-  *avghum  = sumhum  / (40.0 * hour + ceil(halfminute / 3.0));
+  *avgtemp = sumtemp / index;
+  *avghum  = sumhum  / index;
 }
 
 void calculateStatsCO2(int* min, int* max, int* avg) {
-  extern uint8_t halfminute, hour;
-  int i, j, numEnties, sum = 0;
-  int value = co2measurements[0][0];
+  int sum = 0;
+  int value = getCO2Measurement(0);
   *min = value;
   *max = value;
 
-  for (i=0; i<=hour; i++) {
-    if (i != hour) numEnties = 120;
-    else numEnties = halfminute;
-    for (j=0; j<numEnties; j++) {
-      value = co2measurements[i][j];
-      if (value < *min) *min = value;
-      if (value > *max) *max = value;
-      sum += value;
-    }
+  uint16_t index;
+  if (overflow) index = NUM_MEASUREMENTS;
+  else          index = currentIndex;
+  for (int i=0; i<=index; i++) {
+    value = getCO2Measurement(i);
+    if (value < *min) *min = value;
+    if (value > *max) *max = value;
+    sum += value;
   }
 
-  *avg = sum / (120.0 * hour + halfminute);
+  *avg = sum / index;
 }
 
 void displayCO2HistoryGraph() {
-  extern uint8_t halfminute, hour;
   int min, max, avg;
   calculateStatsCO2(&min, &max, &avg);
   float yscale = 184.0 / (max - min);
-  int numMeasurements = 120 * hour + halfminute;
-  float stepsPerPixel = numMeasurements / 200.0;
+  uint16_t index;
+  if (overflow) index = NUM_MEASUREMENTS;
+  else          index = currentIndex;
+  float stepsPerPixel = index / 200.0;
 
   Paint_Clear(WHITE);
   Paint_DrawNum(0, 0, min, &Font16, BLACK, WHITE);
@@ -532,15 +530,15 @@ void displayCO2HistoryGraph() {
   Paint_DrawNum(100-11, 0, avg, &Font16, BLACK, WHITE);
 
   char duration[20];
-  sprintf(duration, "%.1f", hour+halfminute/120.0);
+  sprintf(duration, "%.1f", index/120.0);
   strcat(duration, "h");
   Paint_DrawString_EN(0, 200-16, "-", &Font16, WHITE, BLACK);
   Paint_DrawString_EN(11, 200-16, duration, &Font16, WHITE, BLACK);
   Paint_DrawString_EN(200-11*3, 200-16, "now", &Font16, WHITE, BLACK);
 
-  int privY = co2measurements[0][0];
+  int privY = getCO2Measurement(0);
   for (int x=1; x<200; x++) {
-    int y = co2measurements[(int)((x * stepsPerPixel) / 120.0)][(int)(x * stepsPerPixel) % 120];
+    int y = getCO2Measurement((int)(x * stepsPerPixel));
     y = 200.0 - ((y - min) * yscale);
     Paint_DrawLine(x-1, privY, x, y, BLACK, DOT_PIXEL_2X2, LINE_STYLE_SOLID);
     privY = y;
@@ -552,15 +550,16 @@ void displayCO2HistoryGraph() {
 }
 
 void displayTempHumHistoryGraph() {
-  extern uint8_t halfminute, hour;
   int mintemp, maxtemp, avgtemp, minhum, maxhum, avghum;
   calculateTempHumStats(&mintemp, &maxtemp, &avgtemp, &minhum, &maxhum, &avghum);
 
   float hight = 200.0 - 2*16.0;
   float yscaletemp = hight / (maxtemp - mintemp);
   float yscalehum = hight / (maxhum - minhum);
-  int numMeasurements = 40 * hour + ceil(halfminute / 3.0);
-  float stepsPerPixel = numMeasurements / 200.0;
+  uint16_t index;
+  if (overflow) index = NUM_MEASUREMENTS / 3;
+  else          index = ceil(currentIndex / 3.0);
+  float stepsPerPixel = index / 200.0;
 
   Paint_Clear(WHITE);
   char temp[20];
@@ -583,18 +582,18 @@ void displayTempHumHistoryGraph() {
   Paint_DrawString_EN(200-11, 16, "%", &Font16, WHITE, BLACK);
 
   char duration[20];
-  sprintf(duration, "%.1f", hour+halfminute/120.0);
+  sprintf(duration, "%.1f", index/40.0);
   strcat(duration, "h");
   Paint_DrawString_EN(0, 200-16, "-", &Font16, WHITE, BLACK);
   Paint_DrawString_EN(11, 200-16, duration, &Font16, WHITE, BLACK);
   Paint_DrawString_EN(200-11*3, 200-16, "now", &Font16, WHITE, BLACK);
 
-  int privYtemp = tempHumMeasurements[0][0].temperature;
-  int privYhum = tempHumMeasurements[0][0].humidity;
+  int privYtemp = getTempMeasurement(0);
+  int privYhum = getHumMeasurement(0);
 
   for (int x=1; x<200; x++) {
-    int ytemp = tempHumMeasurements[(int)((x * stepsPerPixel) / 40.0)][(int)(x * stepsPerPixel) % 40].temperature;
-    int yhum =  tempHumMeasurements[(int)((x * stepsPerPixel) / 40.0)][(int)(x * stepsPerPixel) % 40].humidity;
+    int ytemp = getTempMeasurement((int)(x * stepsPerPixel));
+    int yhum =  getHumMeasurement((int)(x * stepsPerPixel));
     ytemp = 200.0 - ((ytemp - mintemp) * yscaletemp);
     yhum = 200.0 - ((yhum - minhum) * yscalehum);
     Paint_DrawLine(x-1, privYtemp, x, ytemp, BLACK, DOT_PIXEL_2X2, LINE_STYLE_SOLID);
@@ -608,6 +607,7 @@ void displayTempHumHistoryGraph() {
   updateDisplay();
 }
 
+uint8_t hour;
 void displayHistory(uint8_t qrcodeNumber) {
   if (qrcodeNumber == hour+2) {
     displayCO2HistoryGraph();
@@ -619,12 +619,11 @@ void displayHistory(uint8_t qrcodeNumber) {
   }
 
   char buffer[5*120+1];
-  int numEnties = halfminute;
-  if (hour != qrcodeNumber) numEnties = 120; // display all values included in previous hours
-
+  int numEnties = currentIndex % 120;
+  if (overflow || hour != qrcodeNumber) numEnties = 120; // display all values included in previous hours
   for (int i=0; i<numEnties; i++) {
     char tempStr[6];
-    snprintf(tempStr, sizeof(tempStr), "%d", co2measurements[qrcodeNumber][i]);
+    snprintf(tempStr, sizeof(tempStr), "%d", getCO2Measurement(qrcodeNumber*120+i));
 
     if (i == 0) snprintf(buffer, sizeof(buffer), "%s", tempStr);
     else snprintf(buffer + strlen(buffer), sizeof(buffer) - strlen(buffer), " %s", tempStr);
@@ -643,26 +642,16 @@ void displayHistory(uint8_t qrcodeNumber) {
   updateDisplay();
 }
 
-//uint8_t qrcodeNumber = 0;
 void history() {
   // DEMO DATA:
-  /*
-  hour = 23;
-  halfminute = 120;
-  for (int i=0; i<120; i++) {
-    for (int j=0; j<24; j++) {
-      co2measurements[j][i] = 400+i;
-    }
-  }
-  for (int i=0; i<40; i++) {
-    for (int j=0; j<24; j++) {
-      tempHumMeasurements[j][i].temperature = 200+i;
-      tempHumMeasurements[j][i].humidity = 20+i/2;
-    }
-  }
-  */
+  /*for (int i=0; i<NUM_MEASUREMENTS; i++) {
+    saveMeasurement(i, 20.0+i/100.0, 100.0-i/50.0);
+  }*/
+
   uint16_t mspressed;
   unsigned long historyStartTime = millis();
+  if (overflow) hour = 23;
+  else          hour = currentIndex/120;
   uint8_t qrcodeNumber = hour+2; // start at CO2 graph
   refreshes = 1; // force full update
   displayHistory(qrcodeNumber);

@@ -10,7 +10,7 @@
    - WiFiManager: https://github.com/tzapu/WiFiManager
    - ArduinoMqttClient (if MQTT is defined)
 */
-#define VERSION "v5.1"
+#define VERSION "v5.2"
 
 #define HEIGHT_ABOVE_SEA_LEVEL 50             // Berlin
 #define TZ_DATA "CET-1CEST,M3.5.0,M10.5.0/3"  // Europe/Berlin time zone from https://github.com/nayarsystems/posix_tz_db/blob/master/zones.csv
@@ -94,10 +94,11 @@ RTC_DATA_ATTR uint16_t sensorStatus, serial0, serial1, serial2;
 RTC_DATA_ATTR uint16_t co2 = 400;
 RTC_DATA_ATTR float temperature = 0.0f, humidity = 0.0f;
 
-RTC_DATA_ATTR uint8_t hour = 0;
-RTC_DATA_ATTR uint8_t halfminute = 0;
-RTC_DATA_ATTR uint16_t co2measurements[24][120];        // every 30 sec
-RTC_DATA_ATTR tempHumData tempHumMeasurements[24][40];  // every 1.5 minutes
+RTC_DATA_ATTR uint16_t currentIndex = 0;
+RTC_DATA_ATTR bool overflow = false;
+#define NUM_MEASUREMENTS (24*120)
+RTC_DATA_ATTR uint16_t co2measurements[NUM_MEASUREMENTS];             // every 30 sec
+RTC_DATA_ATTR tempHumData tempHumMeasurements[NUM_MEASUREMENTS / 3];  // every 1.5 minutes
 
 /* WIFI */
 bool shouldSaveConfig = false;
@@ -195,12 +196,15 @@ void HandleRootClient() {
   strftime(time, 20, "%Y-%m-%dT%H:%M:%S", &timeinfo);
   message += "const endTime = new Date('" + String(time) + "').getTime();\n";
 
+  uint16_t index;
+  if (overflow) index = NUM_MEASUREMENTS;
+  else          index = currentIndex;
   time_t now = mktime(&timeinfo);
-  time_t timestamp = now - hour*60*60 - halfminute*30;
+  time_t timestamp = now - index * 30;
   struct tm* timeinfo2 = localtime(&timestamp);
   strftime(time, 20, "%Y-%m-%dT%H:%M:%S", timeinfo2);
   message += "const startTime = new Date('" + String(time) + "').getTime();\n";
-  message += "const numPoints = " + String(hour*120 + halfminute) + ";\n";
+  message += "const numPoints = " + String(index) + ";\n";
 
   message += "function generateValues(start, end, numPoints) { let values = []; let step = (end - start) / (numPoints - 1); for (let i = 0; i < numPoints; i++) { values.push(start + (step * i));} return values;}\n";
   message += "let times = generateValues(startTime, endTime, numPoints).map(time => new Date(time));\n";
@@ -210,18 +214,13 @@ void HandleRootClient() {
   const size_t bufferSize = 2048;
   String Buffer, Element;
   Buffer.reserve(bufferSize);
-  int i, j, numEnties;
-  for (i = 0; i <= hour; i++) {
-    if (i != hour) numEnties = 120;
-    else numEnties = halfminute;
-    for (j = 0; j < numEnties; j++) {
-      Element = String(co2measurements[i][j]) + ",";
-      if (Buffer.length() + Element.length() > bufferSize) {
-        server.sendContent(Buffer);
-        Buffer = "";
-      }
-      Buffer += Element;
-    }
+  for (int i = 0; i < index; i++) {
+    Element = String(getCO2Measurement(i)) + ",";
+    if (Buffer.length() + Element.length() > bufferSize) {
+      server.sendContent(Buffer);
+      Buffer = "";
+   }
+   Buffer += Element;
   }
   server.sendContent(Buffer);
 
@@ -232,39 +231,31 @@ void HandleRootClient() {
   server.sendContent(message);
 
   Buffer = "const y1Values = [";
-  for (i = 0; i <= hour; i++) {
-    if (i != hour) numEnties = 40;
-    else numEnties = ceil(halfminute / 3.0);
-    for (j = 0; j < numEnties; j++) {
-      float temp = tempHumMeasurements[i][j].temperature / 10.0;
-      if (useFahrenheit) sprintf(tempString, "%.1f",(temp * 1.8f) + 32.0f);  // convert to °F
-      else               sprintf(tempString, "%.1f", temp);
-      Element = String(tempString) + ",";
-      if (Buffer.length() + Element.length() > bufferSize) {
-        server.sendContent(Buffer);
-        Buffer = "";
-      }
-      Buffer += Element;
+  index = index / 3.0;
+  for (int i = 0; i < index; i++) {
+    if (useFahrenheit) sprintf(tempString, "%.1f",(getTempMeasurement(i)/10.0 * 1.8f) + 32.0f);  // convert to °F
+    else               sprintf(tempString, "%.1f", getTempMeasurement(i)/10.0);
+    Element = String(tempString) + ",";
+    if (Buffer.length() + Element.length() > bufferSize) {
+      server.sendContent(Buffer);
+      Buffer = "";
     }
+    Buffer += Element;
   }
   server.sendContent(Buffer);
 
   Buffer = "];\nconst y2Values = [";
-  for (i = 0; i <= hour; i++) {
-    if (i != hour) numEnties = 40;
-    else numEnties = ceil(halfminute / 3.0);
-    for (j = 0; j < numEnties; j++) {
-      Element = String(tempHumMeasurements[i][j].humidity) + ",";
-      if (Buffer.length() + Element.length() > bufferSize) {
-        server.sendContent(Buffer);
-        Buffer = "";
-      }
-      Buffer += Element;
+  for (int i = 0; i < index; i++) {
+    Element = String(getHumMeasurement(i)) + ",";
+    if (Buffer.length() + Element.length() > bufferSize) {
+      server.sendContent(Buffer);
+      Buffer = "";
     }
+    Buffer += Element;
   }
   server.sendContent(Buffer);
 
-  message = "];\nconst numPoints2 = " + String(int(hour*40 + ceil(halfminute/3.0))) + ";\n";
+  message = "];\nconst numPoints2 = " + String(index) + ";\n";
   message += "let times2 = generateValues(startTime, endTime, numPoints2).map(time => new Date(time));\n";
   message += "const data2 = [{x: times2, y: y1Values, name: 'Temperature', mode:'lines'}, ";
   message += "{x: times2, y: y2Values, name: 'Humidity', yaxis: 'y2', mode:'lines'}];\n";
@@ -634,22 +625,30 @@ void rainbowMode() {
 }
 
 void saveMeasurement(uint16_t co2, float temperature, float humidity) {
-  if (halfminute == 120) {
-    halfminute = 0;
-    hour++;
-  }
-  if (hour == 24) {
-    for (int i = 0; i < 23; ++i) memcpy(co2measurements[i], co2measurements[i + 1], sizeof(uint16_t) * 120);  // destination, source
-    for (int i = 0; i < 23; ++i) memcpy(tempHumMeasurements[i], tempHumMeasurements[i + 1], sizeof(tempHumData) * 40);
-    hour = 23;
+  co2measurements[currentIndex] = co2;
+  if (!(currentIndex % 3)) { // every 1.5 minutes
+    tempHumMeasurements[currentIndex / 3].temperature = (uint16_t)(temperature * 10);
+    tempHumMeasurements[currentIndex / 3].humidity    = (uint8_t)  humidity;
   }
 
-  co2measurements[hour][halfminute] = co2;
-  if (!(halfminute % 3)) {  // every 1.5 minutes
-    tempHumMeasurements[hour][halfminute / 3].temperature = (uint16_t)(temperature * 10);
-    tempHumMeasurements[hour][halfminute / 3].humidity = (uint8_t)humidity;
+  currentIndex++;
+  if (currentIndex >= NUM_MEASUREMENTS) {
+    currentIndex = 0;
+    overflow = true;
   }
-  halfminute++;
+}
+
+uint16_t getCO2Measurement(uint16_t index) {
+  if (!overflow) return co2measurements[index];
+  else           return co2measurements[(currentIndex + index) % NUM_MEASUREMENTS];
+}
+uint16_t getTempMeasurement(uint16_t index) {
+  if (!overflow) return tempHumMeasurements[index].temperature;
+  else           return tempHumMeasurements[(int)(ceil(currentIndex/3.0) + index) % (NUM_MEASUREMENTS/3)].temperature;
+}
+uint8_t getHumMeasurement(uint16_t index) {
+  if (!overflow) return tempHumMeasurements[index].humidity;
+  else           return tempHumMeasurements[(int)(ceil(currentIndex/3.0) + index) % (NUM_MEASUREMENTS/3)].humidity;
 }
 
 void handleWiFiChange() {
@@ -718,6 +717,7 @@ void startWiFi() {
   WiFi.setHostname(Hostname);  // hostname when connected to home network
 
   wifiManager.setConfigPortalBlocking(false);
+  wifiManager.setWiFiAutoReconnect(true);
   wifiManager.autoConnect("OpenCO2 Sensor");  // name of broadcasted SSID
 
 #ifdef MQTT
@@ -803,7 +803,10 @@ void loop() {
   measureESP32temperature();
 
   if (useWiFi && !BatteryMode) {
-    if (WiFi.status() != WL_CONNECTED) wifiManager.process();
+    if (WiFi.status() != WL_CONNECTED) {
+      wifiManager.autoConnect("OpenCO2 Sensor"); // Attempt to reconnect
+      wifiManager.process();
+    }
 #ifdef airgradient
     if (WiFi.status() == WL_CONNECTED) server.handleClient();
 #endif /* airgradient */
