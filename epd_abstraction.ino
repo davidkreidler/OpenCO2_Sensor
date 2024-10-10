@@ -15,6 +15,15 @@
 #define EINK_1IN54V2
 //#define EINK_4IN2
 
+#ifdef EINK_1IN54V2
+#define WIDTH (float)EPD_1IN54_V2_WIDTH
+#define HEIGHT (float)EPD_1IN54_V2_HEIGHT
+#endif
+#ifdef EINK_4IN2
+#define WIDTH EPD_4IN2_WIDTH
+#define HEIGHT EPD_4IN2_HEIGHT
+#endif
+
 /* welcome */
 #include <EEPROM.h>
 
@@ -477,7 +486,7 @@ void calculateTempHumStats(int* mintemp, int* maxtemp, int* avgtemp, int* minhum
   uint16_t index;
   if (overflow) index = NUM_MEASUREMENTS / 3;
   else          index = ceil(currentIndex / 3.0);
-  for (int i=0; i<=index; i++) {
+  for (int i=0; i<index; i++) {
     value = getTempMeasurement(i);
     if (value < *mintemp) *mintemp = value;
     if (value > *maxtemp) *maxtemp = value;
@@ -502,7 +511,7 @@ void calculateStatsCO2(int* min, int* max, int* avg) {
   uint16_t index;
   if (overflow) index = NUM_MEASUREMENTS;
   else          index = currentIndex;
-  for (int i=0; i<=index; i++) {
+  for (int i=0; i<index; i++) {
     value = getCO2Measurement(i);
     if (value < *min) *min = value;
     if (value > *max) *max = value;
@@ -515,11 +524,11 @@ void calculateStatsCO2(int* min, int* max, int* avg) {
 void displayCO2HistoryGraph() {
   int min, max, avg;
   calculateStatsCO2(&min, &max, &avg);
-  float yscale = 184.0 / (max - min);
+  float yscale = (HEIGHT-16.0) / (max - min);
   uint16_t index;
   if (overflow) index = NUM_MEASUREMENTS;
   else          index = currentIndex;
-  float stepsPerPixel = index / 200.0;
+  float stepsPerPixel = index / (float)WIDTH;
 
   Paint_Clear(WHITE);
   Paint_DrawNum(0, 0, min, &Font16, BLACK, WHITE);
@@ -532,17 +541,17 @@ void displayCO2HistoryGraph() {
   char duration[20];
   sprintf(duration, "%.1f", index/120.0);
   strcat(duration, "h");
-  Paint_DrawString_EN(0, 200-16, "-", &Font16, WHITE, BLACK);
-  Paint_DrawString_EN(11, 200-16, duration, &Font16, WHITE, BLACK);
-  Paint_DrawString_EN(200-11*3, 200-16, "now", &Font16, WHITE, BLACK);
+  Paint_DrawString_EN(0, HEIGHT-16, "-", &Font16, WHITE, BLACK);
+  Paint_DrawString_EN(11, HEIGHT-16, duration, &Font16, WHITE, BLACK);
+  Paint_DrawString_EN(WIDTH-11*3, HEIGHT-16, "now", &Font16, WHITE, BLACK);
 
   int privY = getCO2Measurement(0);
-  for (int x=1; x<200; x++) {
+  for (int x=1; x<WIDTH; x++) {
     int y = getCO2Measurement((int)(x * stepsPerPixel));
-    y = 200.0 - ((y - min) * yscale);
+    y = (float)HEIGHT - ((y - min) * yscale);
     Paint_DrawLine(x-1, privY, x, y, BLACK, DOT_PIXEL_2X2, LINE_STYLE_SOLID);
     privY = y;
-    for (int i = 200; i>y; i--) {
+    for (int i = HEIGHT; i>y; i--) {
       if (!(i%5)) Paint_DrawPoint(x, i, BLACK, DOT_PIXEL_1X1, DOT_FILL_AROUND);
     }
   }
@@ -553,13 +562,13 @@ void displayTempHumHistoryGraph() {
   int mintemp, maxtemp, avgtemp, minhum, maxhum, avghum;
   calculateTempHumStats(&mintemp, &maxtemp, &avgtemp, &minhum, &maxhum, &avghum);
 
-  float hight = 200.0 - 2*16.0;
+  float hight = HEIGHT - 2*16.0;
   float yscaletemp = hight / (maxtemp - mintemp);
   float yscalehum = hight / (maxhum - minhum);
   uint16_t index;
   if (overflow) index = NUM_MEASUREMENTS / 3;
   else          index = ceil(currentIndex / 3.0);
-  float stepsPerPixel = index / 200.0;
+  float stepsPerPixel = index / (float)WIDTH;
 
   Paint_Clear(WHITE);
   char temp[20];
@@ -584,20 +593,20 @@ void displayTempHumHistoryGraph() {
   char duration[20];
   sprintf(duration, "%.1f", index/40.0);
   strcat(duration, "h");
-  Paint_DrawString_EN(0, 200-16, "-", &Font16, WHITE, BLACK);
-  Paint_DrawString_EN(11, 200-16, duration, &Font16, WHITE, BLACK);
-  Paint_DrawString_EN(200-11*3, 200-16, "now", &Font16, WHITE, BLACK);
+  Paint_DrawString_EN(0, HEIGHT-16, "-", &Font16, WHITE, BLACK);
+  Paint_DrawString_EN(11, HEIGHT-16, duration, &Font16, WHITE, BLACK);
+  Paint_DrawString_EN(WIDTH-11*3, HEIGHT-16, "now", &Font16, WHITE, BLACK);
 
   int privYtemp = getTempMeasurement(0);
   int privYhum = getHumMeasurement(0);
 
-  for (int x=1; x<200; x++) {
+  for (int x=1; x<WIDTH; x++) {
     int ytemp = getTempMeasurement((int)(x * stepsPerPixel));
     int yhum =  getHumMeasurement((int)(x * stepsPerPixel));
-    ytemp = 200.0 - ((ytemp - mintemp) * yscaletemp);
-    yhum = 200.0 - ((yhum - minhum) * yscalehum);
+    ytemp = (float)HEIGHT - ((ytemp - mintemp) * yscaletemp);
+    yhum = (float)HEIGHT - ((yhum - minhum) * yscalehum);
     Paint_DrawLine(x-1, privYtemp, x, ytemp, BLACK, DOT_PIXEL_2X2, LINE_STYLE_SOLID);
-    for (int i = 200; i>ytemp; i--) {
+    for (int i = HEIGHT; i>ytemp; i--) {
       if (!(i%5)) Paint_DrawPoint(x, i, BLACK, DOT_PIXEL_2X2, DOT_FILL_AROUND);
     }
     Paint_DrawLine(x-1, privYhum, x, yhum, BLACK, DOT_PIXEL_2X2, LINE_STYLE_SOLID);

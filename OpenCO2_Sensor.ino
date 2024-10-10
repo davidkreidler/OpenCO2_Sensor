@@ -10,12 +10,14 @@
    - WiFiManager: https://github.com/tzapu/WiFiManager
    - ArduinoMqttClient (if MQTT is defined)
 */
-#define VERSION "v5.2"
+#define VERSION "v5.3"
 
 #define HEIGHT_ABOVE_SEA_LEVEL 50             // Berlin
 #define TZ_DATA "CET-1CEST,M3.5.0,M10.5.0/3"  // Europe/Berlin time zone from https://github.com/nayarsystems/posix_tz_db/blob/master/zones.csv
 #define LIGHT_SLEEP_TIME 500
-#define DEEP_SLEEP_TIME 29500
+#define DEEP_SLEEP_TIME 29124
+#define DEEP_SLEEP_TIME_NO_DISPLAY_UPDATE DEEP_SLEEP_TIME + 965 // offset for no display update
+static unsigned long lastMeasurementTimeMs = 0;
 
 /* Includes display */
 #include "DEV_Config.h"
@@ -812,11 +814,22 @@ void loop() {
 #endif /* airgradient */
   }
 
+  // force 5 seconds measurement Interval when not on Battery
+  if (!BatteryMode && !comingFromDeepSleep && (millis() - lastMeasurementTimeMs < 5000)) {
+    if (useWiFi) {
+      if (millis() - lastMeasurementTimeMs > LIGHT_SLEEP_TIME) {
+        goto_light_sleep(LIGHT_SLEEP_TIME);
+        return;  // otherwise continues running!
+      }
+    }
+    goto_light_sleep(5000 - (millis() - lastMeasurementTimeMs));
+  }
+
   bool isDataReady = false;
   uint16_t ready_error = scd4x.getDataReadyFlag(isDataReady);
   if (ready_error || !isDataReady) {
-    if (BatteryMode && comingFromDeepSleep) goto_deep_sleep(DEEP_SLEEP_TIME);
-    else goto_light_sleep(LIGHT_SLEEP_TIME);
+    if (BatteryMode && comingFromDeepSleep) goto_deep_sleep(DEEP_SLEEP_TIME/2);
+    else goto_light_sleep(LIGHT_SLEEP_TIME/2);
     return;  // otherwise continues running!
   }
 
@@ -824,6 +837,7 @@ void loop() {
   uint16_t new_co2 = 400;
   float new_temperature = 0.0f;
   uint16_t error = scd4x.readMeasurement(new_co2, new_temperature, humidity);
+  lastMeasurementTimeMs = millis();
   if (error) {
     char errorMessage[256];
     errorToString(error, errorMessage, 256);
@@ -834,7 +848,7 @@ void loop() {
     /* don't update in Battery mode, unless CO2 has changed by 3% or temperature by 0.5°C */
     if (!TEST_MODE && BatteryMode && comingFromDeepSleep) {
       if ((abs(new_co2 - co2) < (0.03 * co2)) && (fabs(new_temperature - temperature) < 0.5)) {
-        goto_deep_sleep(DEEP_SLEEP_TIME);
+        goto_deep_sleep(DEEP_SLEEP_TIME_NO_DISPLAY_UPDATE);
       }
     }
 
