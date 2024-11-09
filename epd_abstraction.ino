@@ -100,10 +100,8 @@ void handleButtonPress() {
             displayinfo();
             while (digitalRead(BUTTON) != 0) delay(100); // wait for button press
             break;
-          case RAINBOW:
-            rainbowMode();
-            setLED(co2);
-            refreshes = 1;
+          case FUN:
+            FUNMenu();
             break;
         }
         clearMenu();
@@ -253,6 +251,59 @@ void OptionsMenu() {
           displayOptionsMenu(selectedOption);
           detachInterrupt(digitalPinToInterrupt(BUTTON));
           menuStartTime = millis(); // display again for 20 sec
+          if (digitalRead(BUTTON) == 0) break; // long press detected
+        }
+      }
+    }
+  }
+}
+
+void FUNMenu() {
+  uint8_t selectedOption = 0;
+  displayFUNMenu(selectedOption);
+  uint16_t mspressed;
+  unsigned long menuStartTime = millis();
+
+  for (;;) { 
+    if ((millis() - menuStartTime) > 20000) return; // display FUN Menu up to 20 sec
+    mspressed = 0;
+    if (digitalRead(BUTTON) == 0) {
+      while(digitalRead(BUTTON) == 0) { // calculate how long BUTTON is pressed
+        delay(100);
+        mspressed += 100;
+        if (mspressed > 1000) break;
+      }
+      if (mspressed > 1000) { // long press
+        switch (selectedOption) {
+          case RAINBOW:
+            rainbowMode();
+            setLED(co2);
+            refreshes = 1;
+            break;
+          case SNAKE:
+            displaySnake();
+            refreshes = 1;
+            break;
+          /*case TICTACTOE:
+            displayTicTacToe();
+            refreshes = 1;
+            break;*/
+          case EXIT_FUN:
+            return;
+        }
+        setLED(co2);
+        displayFUNMenu(selectedOption);
+        menuStartTime = millis(); // display FUN Menu again for 20 sec
+      } else { // goto next Menu point
+        buttonPressedAgain = true; // display at least once
+        while (buttonPressedAgain) {
+          buttonPressedAgain = false;
+          selectedOption++;
+          selectedOption %= NUM_FUN_OPTIONS;
+          attachInterrupt(digitalPinToInterrupt(BUTTON), buttonInterrupt, FALLING);
+          displayFUNMenu(selectedOption);
+          detachInterrupt(digitalPinToInterrupt(BUTTON));
+          menuStartTime = millis(); // display FUN Menu again for 20 sec
           if (digitalRead(BUTTON) == 0) break; // long press detected
         }
       }
@@ -754,6 +805,22 @@ void displayOptionsMenu(uint8_t selectedOption) {
   updateDisplay();
 }
 
+void displayFUNMenu(uint8_t selectedOption) {
+  const char* FUNmenuItem;
+  Paint_Clear(WHITE);
+  Paint_DrawString_EN(75, 0, "FUN", &Font24, WHITE, BLACK);
+  Paint_DrawLine(10, 23, 190, 23, BLACK, DOT_PIXEL_1X1, LINE_STYLE_SOLID);
+
+  for (int i=0; i<NUM_FUN_OPTIONS; i++) {
+    if (english) FUNmenuItem = EnglishFUNmenuItems[i];
+    else         FUNmenuItem = GermanFUNmenuItems[i];
+    Paint_DrawString_EN(5, 25*(i+1), FUNmenuItem, &Font24, WHITE, BLACK);
+  }
+
+  invertSelected(selectedOption);
+  updateDisplay();
+}
+
 void invertSelected(uint8_t selectedOption) {
 #ifdef EINK_1IN54V2
   for (int x = 0; x < 200; x++) {
@@ -771,6 +838,129 @@ void invertSelected(uint8_t selectedOption) {
     }
   }
 #endif
+}
+
+void updateSnakeDisplay(int snakeHeadX, int snakeHeadY, int snakeTailX, int snakeTailY) {
+  Paint_DrawRectangle(snakeTailX*25, snakeTailY*25, snakeTailX*25+20, snakeTailY*25+20, WHITE, DOT_PIXEL_2X2, DRAW_FILL_FULL);      // delete tail
+  Paint_DrawRectangle(snakeHeadX*25+1, snakeHeadY*25+1, snakeHeadX*25+19, snakeHeadY*25+19, BLACK, DOT_PIXEL_2X2, DRAW_FILL_EMPTY); // add head
+  EPD_1IN54_V2_DisplayPart(BlackImage);
+}
+
+enum direction {
+  DOWN,
+  LEFT,
+  UP,
+  RIGHT,
+  DIRECTION_COUNT
+};
+struct position {
+  int x;
+  int y;
+};
+struct position Snake[64];
+struct position Apple;
+int snakeLength = 1;
+
+void newApplePosition() {
+  Apple.x = rand() % (8);
+  Apple.y = rand() % (8);
+  for (int i=0; i<snakeLength; i++) {
+    if (Snake[i].x == Apple.x && Snake[i].y == Apple.y) {
+      newApplePosition();
+      return;
+    }
+  }
+  Paint_DrawLine(Apple.x*25+2, Apple.y*25+2, Apple.x*25+18, Apple.y*25+18, BLACK, DOT_PIXEL_2X2, LINE_STYLE_SOLID);
+  Paint_DrawLine(Apple.x*25+18, Apple.y*25+2, Apple.x*25+2, Apple.y*25+18, BLACK, DOT_PIXEL_2X2, LINE_STYLE_SOLID);
+}
+
+void displaySnake() {
+  Paint_Clear(WHITE);
+  if (comingFromDeepSleep && HWSubRev > 1) {
+    EPD_1IN54_V2_Init_Partial_After_Powerdown();
+    EPD_1IN54_V2_writePrevImage(BlackImage);
+  } else {
+    EPD_1IN54_V2_Init_Partial();
+  }
+
+  Snake[0].x = 3;
+  Snake[0].y = 2;
+  Snake[1].x = 3;
+  Snake[1].y = 3;
+  enum direction snakeDirection = DOWN;
+  newApplePosition();
+
+  attachInterrupt(digitalPinToInterrupt(BUTTON), buttonInterrupt, FALLING);
+  while (true) {
+    updateSnakeDisplay(Snake[snakeLength].x, Snake[snakeLength].y, Snake[0].x, Snake[0].y);
+
+    if (buttonPressedAgain) {
+      snakeDirection = (enum direction)((snakeDirection + 1) % DIRECTION_COUNT);
+      buttonPressedAgain = false;
+    }
+
+    if ( Snake[snakeLength].x == Apple.x && Snake[snakeLength].y == Apple.y) {
+      snakeLength++;
+      Snake[snakeLength].x = Snake[snakeLength-1].x;
+      Snake[snakeLength].y = Snake[snakeLength-1].y;
+      newApplePosition();
+    }
+
+    for(int i=0; i<snakeLength-1; i++) {
+      if (Snake[snakeLength].x == Snake[i].x
+       && Snake[snakeLength].y == Snake[i].y ) {
+        gameOver();
+        return;
+       }
+    }
+
+    for(int i=0; i<snakeLength; i++) {
+      Snake[i].x = Snake[i+1].x;
+      Snake[i].y = Snake[i+1].y;
+    }
+
+    switch (snakeDirection) {
+      case DOWN:
+        Snake[snakeLength].y = Snake[snakeLength].y+1;
+        break;
+      case LEFT:
+        Snake[snakeLength].x = Snake[snakeLength].x-1;
+        break;
+      case UP:
+        Snake[snakeLength].y = Snake[snakeLength].y-1;
+        break;
+      case RIGHT:
+        Snake[snakeLength].x = Snake[snakeLength].x+1;
+        break;
+      case DIRECTION_COUNT:
+        break;
+    }
+
+    if (Snake[snakeLength].x > 7
+     || Snake[snakeLength].x < 0
+     || Snake[snakeLength].y > 7
+     || Snake[snakeLength].y < 0 ) {
+      gameOver();
+      return;
+     }
+  }
+}
+
+void gameOver() {
+  Paint_DrawString_EN(15, 88, "GAME OVER!", &Font24, WHITE, BLACK);
+  int x = 100-23;
+  if (snakeLength>9) x-=23;
+  if (snakeLength>99) x-=23;
+  Paint_DrawNum(x, 200-70, snakeLength-1, &big, BLACK, WHITE);
+  EPD_1IN54_V2_DisplayPart(BlackImage);
+  detachInterrupt(digitalPinToInterrupt(BUTTON));
+  snakeLength = 1;
+  delay(1000);
+  while (digitalRead(BUTTON) != 0) delay(100); // wait for button press
+}
+
+void displayTicTacToe() {
+  return;
 }
 
 void displayFlappyBird() {
@@ -861,8 +1051,7 @@ void displayWiFi(bool useWiFi) {
         esp_qrcode_config_t cfg = ESP_QRCODE_CONFIG();
         esp_qrcode_generate(&cfg, buffer);
 
-        Paint_DrawString_EN(1,   1, ip.c_str(), &Font16, BLACK, WHITE);
-        Paint_DrawString_EN(1, 184, ":9925", &Font16, BLACK, WHITE);
+        Paint_DrawString_EN(16, 200-21, "openco2:9925", &Font20, BLACK, WHITE);
       } else {
         char const *buffer = "WIFI:T:;S:OpenCO2 Sensor;P:;;";
         esp_qrcode_config_t cfg = ESP_QRCODE_CONFIG();

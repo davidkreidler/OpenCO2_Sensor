@@ -10,7 +10,7 @@ enum MenuOptions {
   HISTORY,
   WLAN,
   INFO,
-  RAINBOW,
+  FUN,
   NUM_OPTIONS
 };
 enum LEDMenuOptions {
@@ -29,6 +29,13 @@ enum DisplayMenuOptions {
   EXIT_DISPLAY,
   NUM_DISPLAY_OPTIONS
 };
+enum FUNMenuOptions {
+  RAINBOW,
+  SNAKE,
+  //TICTACTOE,
+  EXIT_FUN,
+  NUM_FUN_OPTIONS
+};
 
 /* ENGLISH */
 const char* EnglishMenuItems[NUM_OPTIONS] = {
@@ -38,7 +45,7 @@ const char* EnglishMenuItems[NUM_OPTIONS] = {
   "History",
   "Wi-Fi",
   "Info",
-  "Rainbow"//"Santa"
+  "Fun"
 };
 const char* EnglishLEDmenuItems[NUM_LED_OPTIONS] = {
   "Battery",
@@ -54,6 +61,12 @@ const char* EnglishOptionsMenuItems[NUM_DISPLAY_OPTIONS] = {
   "Font",
   "Exit"
 };
+const char* EnglishFUNmenuItems[NUM_FUN_OPTIONS] = {
+  "Rainbow",
+  "Snake",
+  //"TicTacToe",
+  "Exit"
+};
 
 /* GERMAN */
 const char* GermanMenuItems[NUM_OPTIONS] = {
@@ -63,7 +76,7 @@ const char* GermanMenuItems[NUM_OPTIONS] = {
   "Historie",
   "WLAN",
   "Info",
-  "Regenbogen"//"Weihnachten"
+  "Spass"
 };
 const char* GermanLEDmenuItems[NUM_LED_OPTIONS] = {
   "Batterie",
@@ -77,6 +90,12 @@ const char* GermanOptionsMenuItems[NUM_DISPLAY_OPTIONS] = {
   "Einheit",
   "German",
   "Schrift",
+  "Beenden"
+};
+const char* GermanFUNmenuItems[NUM_FUN_OPTIONS] = {
+  "Regenbogen",
+  "Snake",
+  //"TicTacToe",
   "Beenden"
 };
 

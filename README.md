@@ -29,6 +29,32 @@ The integrated, industry-leading humidity and temperature sensor offers high acc
 
 For displaying the air quality as a traffic light (green, yellow, red, magenta). Brightness and color are adjustable via software.
 
+# Home Assistant
+
+Add this config to the `configuration.yaml` of your Home Assistant. Below Version 5.4 please change `OpenCO2` to the IP address.
+```
+rest:
+    scan_interval: 60
+    resource: http://OpenCO2:9925/metrics
+    method: GET
+    sensor:
+      - name: "CO2"
+        device_class: carbon_dioxide
+        unique_id: "d611314f-9010-4d0d-aa3b-37c7f350c82f"
+        value_template: >
+            {{ value | regex_findall_index("(?:rco2.*})(\d+)") }}
+      - name: "Temperature"
+        unique_id: "d611314f-9010-4d0d-aa3b-37c7f350c821"
+        device_class: temperature
+        value_template: >
+            {{ value | regex_findall_index("(?:atmp.*})((?:\d|\.)+)") }}
+      - name: "Humidity"
+        unique_id: "d611314f-9010-4d0d-aa3b-37c7f350c822"
+        device_class: humidity
+        value_template: >
+            {{ value | regex_findall_index("(?:rhum.*})((?:\d|\.)+)") }}
+```
+
 # 3D-printed housing
 
 Size: 4.7 x 4.1 x 2.4 cm
@@ -51,10 +77,11 @@ Press the Menu button on the backside of the OpenCO2 Sensor. Select an option vi
 
 # Wi-Fi
 
-Enable Wi-Fi via the Menu button. When power is connected, an access point `OpenCO2 Sensor` is enabled. Connect to it and navigate to http://192.168.4.1 (it will open automatically on modern Smartphones). Insert your home Wi-Fi credentials under `Configure WiFi`. Choose your network name from the list in the top and insert the password. Click `Save`. The sensor will now be automatically connected. Navigate to IP:9925 to see current co2/temperature/humidity measurements.
+Enable Wi-Fi via the Menu button. When power is connected, an access point `OpenCO2 Sensor` is enabled. Connect to it and navigate to http://192.168.4.1 (it will open automatically on modern Smartphones). Insert your home Wi-Fi credentials under `Configure WiFi`. Choose your network name from the list in the top and insert the password. Click `Save`. The sensor will now be automatically connected. Navigate to [openco2:9925](http://OpenCO2:9925) to see a graph of CO2, Temperature and Humidity measurements.
 ![alt text](https://github.com/davidkreidler/OpenCO2_Sensor/raw/main/pictures/setup.jpg)
+![alt text](https://github.com/davidkreidler/OpenCO2_Sensor/raw/main/pictures/website.png)
 
-# Machine-readable Measurements over WiFi  
+# Machine-readable Measurements over WiFi
 Connect the sensor to your Wi-Fi network and find out the IP of the sensor in your home network via the ui of your router or on the sensor itself via the button under Menu -> Info .
 `curl [IP]:9925/metrics`
 

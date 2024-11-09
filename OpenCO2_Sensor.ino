@@ -10,7 +10,7 @@
    - WiFiManager: https://github.com/tzapu/WiFiManager
    - ArduinoMqttClient (if MQTT is defined)
 */
-#define VERSION "v5.3"
+#define VERSION "v5.4"
 
 #define HEIGHT_ABOVE_SEA_LEVEL 50             // Berlin
 #define TZ_DATA "CET-1CEST,M3.5.0,M10.5.0/3"  // Europe/Berlin time zone from https://github.com/nayarsystems/posix_tz_db/blob/master/zones.csv
@@ -714,10 +714,7 @@ void startWiFi() {
   wifiManager.addParameter(&custom_api_token);
 #endif /* MQTT */
 
-  char Hostname[28];
-  snprintf(Hostname, 28, "OpenCO2-Sensor%llX", ESP.getEfuseMac());
-  WiFi.setHostname(Hostname);  // hostname when connected to home network
-
+  WiFi.setHostname("OpenCO2");  // hostname when connected to home network
   wifiManager.setConfigPortalBlocking(false);
   wifiManager.setWiFiAutoReconnect(true);
   wifiManager.autoConnect("OpenCO2 Sensor");  // name of broadcasted SSID
