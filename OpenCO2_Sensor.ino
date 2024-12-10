@@ -10,7 +10,7 @@
    - WiFiManager: https://github.com/tzapu/WiFiManager
    - ArduinoMqttClient (if MQTT is defined)
 */
-#define VERSION "v5.4"
+#define VERSION "v5.5"
 
 #define HEIGHT_ABOVE_SEA_LEVEL 50             // Berlin
 #define TZ_DATA "CET-1CEST,M3.5.0,M10.5.0/3"  // Europe/Berlin time zone from https://github.com/nayarsystems/posix_tz_db/blob/master/zones.csv
@@ -42,7 +42,6 @@ WiFiManager wifiManager;
 #ifdef airgradient
 /* use https://github.com/geerlingguy/internet-pi to store values */
 #include <WebServer.h>
-#include <SPIFFS.h>
 const int port = 9925;
 WebServer server(port);
 #endif /* airgradient */
@@ -100,7 +99,7 @@ RTC_DATA_ATTR uint16_t currentIndex = 0;
 RTC_DATA_ATTR bool overflow = false;
 #define NUM_MEASUREMENTS (24*120)
 RTC_DATA_ATTR uint16_t co2measurements[NUM_MEASUREMENTS];             // every 30 sec
-RTC_DATA_ATTR tempHumData tempHumMeasurements[NUM_MEASUREMENTS / 3];  // every 1.5 minutes
+RTC_DATA_ATTR tempHumData tempHumMeasurements[NUM_MEASUREMENTS / 6];  // every 3 minutes
 
 /* WIFI */
 bool shouldSaveConfig = false;
@@ -233,7 +232,7 @@ void HandleRootClient() {
   server.sendContent(message);
 
   Buffer = "const y1Values = [";
-  index = index / 3.0;
+  index = index / 6.0;
   for (int i = 0; i < index; i++) {
     if (useFahrenheit) sprintf(tempString, "%.1f",(getTempMeasurement(i)/10.0 * 1.8f) + 32.0f);  // convert to °F
     else               sprintf(tempString, "%.1f", getTempMeasurement(i)/10.0);
@@ -436,13 +435,6 @@ void lowBatteryMode() {
   rtc_gpio_pullup_dis(USB_PRESENT);
   rtc_gpio_pulldown_dis(USB_PRESENT);
   esp_sleep_enable_ext0_wakeup(USB_PRESENT, 1);
-
-  esp_sleep_pd_config(ESP_PD_DOMAIN_RTC_PERIPH, ESP_PD_OPTION_AUTO);    // RTC IO, sensors and ULP co-processor
-  esp_sleep_pd_config(ESP_PD_DOMAIN_RTC_SLOW_MEM, ESP_PD_OPTION_AUTO);  // RTC slow memory: auto
-  esp_sleep_pd_config(ESP_PD_DOMAIN_RTC_FAST_MEM, ESP_PD_OPTION_OFF);   // RTC fast memory
-  esp_sleep_pd_config(ESP_PD_DOMAIN_XTAL, ESP_PD_OPTION_OFF);           // XTAL oscillator
-  esp_sleep_pd_config(ESP_PD_DOMAIN_RTC8M, ESP_PD_OPTION_OFF);          // CPU core
-  esp_sleep_pd_config(ESP_PD_DOMAIN_VDDSDIO, ESP_PD_OPTION_OFF);
   esp_deep_sleep_start();
 }
 
@@ -455,12 +447,6 @@ void goto_deep_sleep(int ms) {
   }
 
   esp_sleep_enable_timer_wakeup(ms * 1000);                             // periodic measurement every 30 sec - 0.83 sec awake
-  esp_sleep_pd_config(ESP_PD_DOMAIN_RTC_PERIPH, ESP_PD_OPTION_AUTO);    // RTC IO, sensors and ULP co-processor
-  esp_sleep_pd_config(ESP_PD_DOMAIN_RTC_SLOW_MEM, ESP_PD_OPTION_AUTO);  // RTC slow memory: auto
-  esp_sleep_pd_config(ESP_PD_DOMAIN_RTC_FAST_MEM, ESP_PD_OPTION_OFF);   // RTC fast memory
-  esp_sleep_pd_config(ESP_PD_DOMAIN_XTAL, ESP_PD_OPTION_OFF);           // XTAL oscillator
-  esp_sleep_pd_config(ESP_PD_DOMAIN_RTC8M, ESP_PD_OPTION_OFF);          // CPU core
-  esp_sleep_pd_config(ESP_PD_DOMAIN_VDDSDIO, ESP_PD_OPTION_OFF);
 
   /* Wakeup by usb power */
   rtc_gpio_pullup_dis(USB_PRESENT);
@@ -470,7 +456,7 @@ void goto_deep_sleep(int ms) {
   /* Wakeup by IO0 button */
   rtc_gpio_pullup_en(BUTTON);
   rtc_gpio_pulldown_dis(BUTTON);
-  esp_sleep_enable_ext1_wakeup(0x1, ESP_EXT1_WAKEUP_ALL_LOW);  // 2^0 = GPIO_NUM_0 = BUTTON
+  esp_sleep_enable_ext1_wakeup_io((1ULL << BUTTON), ESP_EXT1_WAKEUP_ANY_LOW);
 
   /* Keep LED enabled */
   if (LEDonBattery) gpio_hold_en(LED_POWER);
@@ -518,12 +504,6 @@ void goto_light_sleep(int ms) {
     esp_sleep_enable_gpio_wakeup();
 
     esp_sleep_enable_timer_wakeup(ms * 1000);                             // periodic measurement every 5 sec -1.1 sec awake
-    esp_sleep_pd_config(ESP_PD_DOMAIN_RTC_PERIPH, ESP_PD_OPTION_AUTO);    // RTC IO, sensors and ULP co-processor
-    esp_sleep_pd_config(ESP_PD_DOMAIN_RTC_SLOW_MEM, ESP_PD_OPTION_AUTO);  // RTC slow memory: auto
-    esp_sleep_pd_config(ESP_PD_DOMAIN_RTC_FAST_MEM, ESP_PD_OPTION_OFF);   // RTC fast memory
-    esp_sleep_pd_config(ESP_PD_DOMAIN_XTAL, ESP_PD_OPTION_OFF);           // XTAL oscillator
-    esp_sleep_pd_config(ESP_PD_DOMAIN_RTC8M, ESP_PD_OPTION_OFF);          // CPU core
-    esp_sleep_pd_config(ESP_PD_DOMAIN_VDDSDIO, ESP_PD_OPTION_OFF);
     esp_light_sleep_start();
   }
 }
@@ -628,9 +608,9 @@ void rainbowMode() {
 
 void saveMeasurement(uint16_t co2, float temperature, float humidity) {
   co2measurements[currentIndex] = co2;
-  if (!(currentIndex % 3)) { // every 1.5 minutes
-    tempHumMeasurements[currentIndex / 3].temperature = (uint16_t)(temperature * 10);
-    tempHumMeasurements[currentIndex / 3].humidity    = (uint8_t)  humidity;
+  if (!(currentIndex % 6)) { // every 3 minutes
+    tempHumMeasurements[currentIndex / 6].temperature = (uint16_t)(temperature * 10);
+    tempHumMeasurements[currentIndex / 6].humidity    = (uint8_t)  humidity;
   }
 
   currentIndex++;
@@ -646,11 +626,11 @@ uint16_t getCO2Measurement(uint16_t index) {
 }
 uint16_t getTempMeasurement(uint16_t index) {
   if (!overflow) return tempHumMeasurements[index].temperature;
-  else           return tempHumMeasurements[(int)(ceil(currentIndex/3.0) + index) % (NUM_MEASUREMENTS/3)].temperature;
+  else           return tempHumMeasurements[(int)(ceil(currentIndex/6.0) + index) % (NUM_MEASUREMENTS/6)].temperature;
 }
 uint8_t getHumMeasurement(uint16_t index) {
   if (!overflow) return tempHumMeasurements[index].humidity;
-  else           return tempHumMeasurements[(int)(ceil(currentIndex/3.0) + index) % (NUM_MEASUREMENTS/3)].humidity;
+  else           return tempHumMeasurements[(int)(ceil(currentIndex/6.0) + index) % (NUM_MEASUREMENTS/6)].humidity;
 }
 
 void handleWiFiChange() {

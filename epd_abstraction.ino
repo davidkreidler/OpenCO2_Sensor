@@ -328,13 +328,6 @@ void displayWelcome() {
   EPD_4IN2_Display(BlackImage);
   EPD_4IN2_Sleep();
 #endif*/
-
-  esp_sleep_pd_config(ESP_PD_DOMAIN_RTC_PERIPH, ESP_PD_OPTION_OFF);     // RTC IO, sensors and ULP co-processor
-  esp_sleep_pd_config(ESP_PD_DOMAIN_RTC_SLOW_MEM, ESP_PD_OPTION_OFF);   // RTC slow memory: auto
-  esp_sleep_pd_config(ESP_PD_DOMAIN_RTC_FAST_MEM, ESP_PD_OPTION_OFF);   // RTC fast memory
-  esp_sleep_pd_config(ESP_PD_DOMAIN_XTAL, ESP_PD_OPTION_OFF);           // XTAL oscillator
-  esp_sleep_pd_config(ESP_PD_DOMAIN_RTC8M, ESP_PD_OPTION_OFF);          // CPU core
-  esp_sleep_pd_config(ESP_PD_DOMAIN_VDDSDIO, ESP_PD_OPTION_OFF);
   esp_deep_sleep_start();
 }
 
@@ -535,8 +528,8 @@ void calculateTempHumStats(int* mintemp, int* maxtemp, int* avgtemp, int* minhum
   *maxhum = value;
 
   uint16_t index;
-  if (overflow) index = NUM_MEASUREMENTS / 3;
-  else          index = ceil(currentIndex / 3.0);
+  if (overflow) index = NUM_MEASUREMENTS / 6;
+  else          index = ceil(currentIndex / 6.0);
   for (int i=0; i<index; i++) {
     value = getTempMeasurement(i);
     if (value < *mintemp) *mintemp = value;
@@ -617,8 +610,8 @@ void displayTempHumHistoryGraph() {
   float yscaletemp = hight / (maxtemp - mintemp);
   float yscalehum = hight / (maxhum - minhum);
   uint16_t index;
-  if (overflow) index = NUM_MEASUREMENTS / 3;
-  else          index = ceil(currentIndex / 3.0);
+  if (overflow) index = NUM_MEASUREMENTS / 6;
+  else          index = ceil(currentIndex / 6.0);
   float stepsPerPixel = index / (float)WIDTH;
 
   Paint_Clear(WHITE);
