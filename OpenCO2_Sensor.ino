@@ -10,7 +10,7 @@
    - WiFiManager: https://github.com/tzapu/WiFiManager
    - ArduinoMqttClient (if MQTT is defined)
 */
-#define VERSION "v5.4"
+#define VERSION "v5.5"
 
 #define HEIGHT_ABOVE_SEA_LEVEL 50             // Berlin
 #define TZ_DATA "CET-1CEST,M3.5.0,M10.5.0/3"  // Europe/Berlin time zone from https://github.com/nayarsystems/posix_tz_db/blob/master/zones.csv
@@ -42,7 +42,6 @@ WiFiManager wifiManager;
 #ifdef airgradient
 /* use https://github.com/geerlingguy/internet-pi to store values */
 #include <WebServer.h>
-#include <SPIFFS.h>
 const int port = 9925;
 WebServer server(port);
 #endif /* airgradient */
@@ -83,6 +82,8 @@ SensirionI2CScd4x scd4x;
 #error This sketch should be used when USB is in OTG mode and MSC On Boot enabled
 #endif
 #include "USB.h"
+#include <USBMSC.h>
+USBMSC usbmsc;
 
 RTC_DATA_ATTR bool USB_ACTIVE = false, initDone = false, BatteryMode = false, comingFromDeepSleep = false;
 RTC_DATA_ATTR bool LEDonBattery, LEDonUSB, useSmoothLEDcolor, invertDisplay, useFahrenheit, useWiFi, english;
@@ -100,7 +101,7 @@ RTC_DATA_ATTR uint16_t currentIndex = 0;
 RTC_DATA_ATTR bool overflow = false;
 #define NUM_MEASUREMENTS (24*120)
 RTC_DATA_ATTR uint16_t co2measurements[NUM_MEASUREMENTS];             // every 30 sec
-RTC_DATA_ATTR tempHumData tempHumMeasurements[NUM_MEASUREMENTS / 3];  // every 1.5 minutes
+RTC_DATA_ATTR tempHumData tempHumMeasurements[NUM_MEASUREMENTS / 4];  // every 2 minutes
 
 /* WIFI */
 bool shouldSaveConfig = false;
@@ -175,13 +176,13 @@ void HandleRootClient() {
 
   String message = "<!DOCTYPE html>\n <html>\n";
   message += "<head>\n <title>OpenCO2 Sensor</title>\n <link rel='icon' href='/favicon.ico' type='image/png' />\n <meta http-equiv='refresh' content='300'>\n";
-  message += "<style> .container { display: flex; gap: 15px; } .rounded-box { font-family: Verdana, Geneva, sans-serif; width: 400px; height: 300px; border-radius: 25px; position: relative; display: flex; flex-direction: column; justify-content: center; font-size: 4em; border: 4px solid #ccc; } .descr-text { position: absolute; top: 10px; left: 10px; font-size: 0.5em; } .center-text { font-size: 1.5em; text-align: center; } .unit-text { font-size: 0.5em; } </style>";
+  message += "<style> .container { display: flex; gap: 15px; } .rounded-box { font-family: Verdana, Geneva, sans-serif; width: 400px; height: 300px; border-radius: 25px; position: relative; display: flex; flex-direction: column; justify-content: center; font-size: 4em; border: 4px solid grey; } .descr-text { position: absolute; top: 10px; left: 10px; font-size: 0.5em; } .center-text { font-size: 1.5em; text-align: center; } .unit-text { font-size: 0.5em; } </style>";
   message += "</head>\n";
 
   message += "<script src='https://cdn.plot.ly/plotly-latest.min.js'></script>\n";
-  message += "<body>\n";
+  message += "<body style='color: grey; background: black;'>\n";
 
-  message += "<div class='container'><div class='rounded-box' style='background-color:#" + getHexColors(co2) + "; color:#FFFFFF;'><div class='descr-text'>CO2</div><div class='center-text'><b>" + String(co2) + "</b><div class='unit-text'>ppm</div></div></div>\n";
+  message += "<div class='container'><div class='rounded-box' style='background-color:#" + getHexColors(co2) + "; color:'grey';'><div class='descr-text'>CO2</div><div class='center-text'><b>" + String(co2) + "</b><div class='unit-text'>ppm</div></div></div>\n";
   char tempString[6];
   if (useFahrenheit) sprintf(tempString, "%.1f",(temperature * 1.8f) + 32.0f);  // convert to °F
   else               sprintf(tempString, "%.1f", temperature);
@@ -228,12 +229,12 @@ void HandleRootClient() {
 
   message = "];\n";
   message += "const data = [{x:times, y:yValues, mode:'lines'}];\n";
-  message += "const layout = {yaxis: { title: 'CO2 (ppm)'}, title: 'History'};\n";
+  message += "const layout = {yaxis: { title: 'CO2 (ppm)'}, title: 'History', plot_bgcolor:'black', paper_bgcolor:'black'};\n";
   message += "Plotly.newPlot('CO2Plot', data, layout);\n";
   server.sendContent(message);
 
   Buffer = "const y1Values = [";
-  index = index / 3.0;
+  index = index / 4.0;
   for (int i = 0; i < index; i++) {
     if (useFahrenheit) sprintf(tempString, "%.1f",(getTempMeasurement(i)/10.0 * 1.8f) + 32.0f);  // convert to °F
     else               sprintf(tempString, "%.1f", getTempMeasurement(i)/10.0);
@@ -262,12 +263,12 @@ void HandleRootClient() {
   message += "const data2 = [{x: times2, y: y1Values, name: 'Temperature', mode:'lines'}, ";
   message += "{x: times2, y: y2Values, name: 'Humidity', yaxis: 'y2', mode:'lines'}];\n";
   message += "const layout2 = { showlegend: false, yaxis: {title: 'Temperature (" + String(useFahrenheit? "*F" : "*C") ;
-  message += ")'}, yaxis2: { title: 'Humidity (%)', overlaying: 'y', side: 'right'}};\n";
+  message += ")'}, yaxis2: { title: 'Humidity (%)', overlaying: 'y', side: 'right'}, plot_bgcolor:'black', paper_bgcolor:'black'};\n";
   message += "Plotly.newPlot('TempHumPlot', data2, layout2);\n";
 
   message += "</script>\n</body>\n</html>\n";
   server.sendContent(message);
-  server.client().stop();
+  server.sendContent("");  // Send finish
 }
 
 void HandleRoot() {
@@ -353,6 +354,7 @@ void initOnce() {
   LEDonUSB = preferences.getBool("LEDonUSB", true);
   ledbrightness = preferences.getInt("ledbrightness", 5);
   font = preferences.getInt("font", 0);
+  if (font == 2) font = 1; // remove gotham font
   changeFont(font);
   useSmoothLEDcolor = preferences.getBool("useSmoothLEDcolor", true);
   invertDisplay = preferences.getBool("invertDisplay", false);
@@ -436,13 +438,6 @@ void lowBatteryMode() {
   rtc_gpio_pullup_dis(USB_PRESENT);
   rtc_gpio_pulldown_dis(USB_PRESENT);
   esp_sleep_enable_ext0_wakeup(USB_PRESENT, 1);
-
-  esp_sleep_pd_config(ESP_PD_DOMAIN_RTC_PERIPH, ESP_PD_OPTION_AUTO);    // RTC IO, sensors and ULP co-processor
-  esp_sleep_pd_config(ESP_PD_DOMAIN_RTC_SLOW_MEM, ESP_PD_OPTION_AUTO);  // RTC slow memory: auto
-  esp_sleep_pd_config(ESP_PD_DOMAIN_RTC_FAST_MEM, ESP_PD_OPTION_OFF);   // RTC fast memory
-  esp_sleep_pd_config(ESP_PD_DOMAIN_XTAL, ESP_PD_OPTION_OFF);           // XTAL oscillator
-  esp_sleep_pd_config(ESP_PD_DOMAIN_RTC8M, ESP_PD_OPTION_OFF);          // CPU core
-  esp_sleep_pd_config(ESP_PD_DOMAIN_VDDSDIO, ESP_PD_OPTION_OFF);
   esp_deep_sleep_start();
 }
 
@@ -455,12 +450,6 @@ void goto_deep_sleep(int ms) {
   }
 
   esp_sleep_enable_timer_wakeup(ms * 1000);                             // periodic measurement every 30 sec - 0.83 sec awake
-  esp_sleep_pd_config(ESP_PD_DOMAIN_RTC_PERIPH, ESP_PD_OPTION_AUTO);    // RTC IO, sensors and ULP co-processor
-  esp_sleep_pd_config(ESP_PD_DOMAIN_RTC_SLOW_MEM, ESP_PD_OPTION_AUTO);  // RTC slow memory: auto
-  esp_sleep_pd_config(ESP_PD_DOMAIN_RTC_FAST_MEM, ESP_PD_OPTION_OFF);   // RTC fast memory
-  esp_sleep_pd_config(ESP_PD_DOMAIN_XTAL, ESP_PD_OPTION_OFF);           // XTAL oscillator
-  esp_sleep_pd_config(ESP_PD_DOMAIN_RTC8M, ESP_PD_OPTION_OFF);          // CPU core
-  esp_sleep_pd_config(ESP_PD_DOMAIN_VDDSDIO, ESP_PD_OPTION_OFF);
 
   /* Wakeup by usb power */
   rtc_gpio_pullup_dis(USB_PRESENT);
@@ -470,11 +459,15 @@ void goto_deep_sleep(int ms) {
   /* Wakeup by IO0 button */
   rtc_gpio_pullup_en(BUTTON);
   rtc_gpio_pulldown_dis(BUTTON);
-  esp_sleep_enable_ext1_wakeup(0x1, ESP_EXT1_WAKEUP_ALL_LOW);  // 2^0 = GPIO_NUM_0 = BUTTON
+  esp_sleep_enable_ext1_wakeup_io((1ULL << BUTTON), ESP_EXT1_WAKEUP_ANY_LOW);
 
   /* Keep LED enabled */
   if (LEDonBattery) gpio_hold_en(LED_POWER);
   else gpio_hold_dis(LED_POWER);
+
+  /* Keep Display power enabled 
+  gpio_hold_en(DISPLAY_POWER);
+  gpio_deep_sleep_hold_en();*/
 
   comingFromDeepSleep = true;
   esp_deep_sleep_start();
@@ -518,12 +511,6 @@ void goto_light_sleep(int ms) {
     esp_sleep_enable_gpio_wakeup();
 
     esp_sleep_enable_timer_wakeup(ms * 1000);                             // periodic measurement every 5 sec -1.1 sec awake
-    esp_sleep_pd_config(ESP_PD_DOMAIN_RTC_PERIPH, ESP_PD_OPTION_AUTO);    // RTC IO, sensors and ULP co-processor
-    esp_sleep_pd_config(ESP_PD_DOMAIN_RTC_SLOW_MEM, ESP_PD_OPTION_AUTO);  // RTC slow memory: auto
-    esp_sleep_pd_config(ESP_PD_DOMAIN_RTC_FAST_MEM, ESP_PD_OPTION_OFF);   // RTC fast memory
-    esp_sleep_pd_config(ESP_PD_DOMAIN_XTAL, ESP_PD_OPTION_OFF);           // XTAL oscillator
-    esp_sleep_pd_config(ESP_PD_DOMAIN_RTC8M, ESP_PD_OPTION_OFF);          // CPU core
-    esp_sleep_pd_config(ESP_PD_DOMAIN_VDDSDIO, ESP_PD_OPTION_OFF);
     esp_light_sleep_start();
   }
 }
@@ -628,9 +615,9 @@ void rainbowMode() {
 
 void saveMeasurement(uint16_t co2, float temperature, float humidity) {
   co2measurements[currentIndex] = co2;
-  if (!(currentIndex % 3)) { // every 1.5 minutes
-    tempHumMeasurements[currentIndex / 3].temperature = (uint16_t)(temperature * 10);
-    tempHumMeasurements[currentIndex / 3].humidity    = (uint8_t)  humidity;
+  if (!(currentIndex % 4)) { // every 2 minutes
+    tempHumMeasurements[currentIndex / 4].temperature = (uint16_t)(temperature * 10);
+    tempHumMeasurements[currentIndex / 4].humidity    = (uint8_t)  humidity;
   }
 
   currentIndex++;
@@ -646,11 +633,11 @@ uint16_t getCO2Measurement(uint16_t index) {
 }
 uint16_t getTempMeasurement(uint16_t index) {
   if (!overflow) return tempHumMeasurements[index].temperature;
-  else           return tempHumMeasurements[(int)(ceil(currentIndex/3.0) + index) % (NUM_MEASUREMENTS/3)].temperature;
+  else           return tempHumMeasurements[(int)(ceil(currentIndex/4.0) + index) % (NUM_MEASUREMENTS/4)].temperature;
 }
 uint8_t getHumMeasurement(uint16_t index) {
   if (!overflow) return tempHumMeasurements[index].humidity;
-  else           return tempHumMeasurements[(int)(ceil(currentIndex/3.0) + index) % (NUM_MEASUREMENTS/3)].humidity;
+  else           return tempHumMeasurements[(int)(ceil(currentIndex/4.0) + index) % (NUM_MEASUREMENTS/4)].humidity;
 }
 
 void handleWiFiChange() {
@@ -716,6 +703,7 @@ void startWiFi() {
 
   WiFi.setHostname("OpenCO2");  // hostname when connected to home network
   wifiManager.setConfigPortalBlocking(false);
+  wifiManager.setClass("invert"); // dark theme
   wifiManager.setWiFiAutoReconnect(true);
   wifiManager.autoConnect("OpenCO2 Sensor");  // name of broadcasted SSID
 
@@ -764,6 +752,7 @@ void setup() {
   scd4x.begin(Wire);
 
   USB.onEvent(usbEventCallback);
+  usbmsc.isWritable(true);
   if (!initDone) initOnce();
 
 #if ARDUINO_USB_CDC_ON_BOOT && !ARDUINO_USB_MODE

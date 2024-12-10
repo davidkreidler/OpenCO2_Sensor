@@ -251,61 +251,13 @@ void Paint_SetPixel(UWORD Xpoint, UWORD Ypoint, UWORD Color)
         
         Rdata = Rdata & (~(0xC0 >> ((X % 4)*2)));
         Paint.Image[Addr] = Rdata | ((Color << 6) >> ((X % 4)*2));
-    }else if(Paint.Scale == 7){
-			UWORD Width = Paint.WidthMemory*3%8 == 0 ? Paint.WidthMemory*3/8 : Paint.WidthMemory*3/8+1;
-			UDOUBLE Addr = (Xpoint * 3) / 8 + Ypoint * Width;
-			UBYTE shift, Rdata, Rdata2;
-			shift = (Xpoint+Ypoint*Paint.HeightMemory) % 8;
-
-			switch(shift) {
-				case 0 :
-					Rdata = Paint.Image[Addr] & 0x1f;
-					Rdata = Rdata | ((Color << 5) & 0xe0);
-					Paint.Image[Addr] = Rdata;
-					break;
-				case 1 :
-					Rdata = Paint.Image[Addr] & 0xe3;
-					Rdata = Rdata | ((Color << 2) & 0x1c);
-					Paint.Image[Addr] = Rdata;
-					break;
-				case 2 :
-					Rdata = Paint.Image[Addr] & 0xfc;
-					Rdata2 = Paint.Image[Addr + 1] & 0x7f;
-					Rdata = Rdata | ((Color >> 1) & 0x03);
-					Rdata2 = Rdata2 | ((Color << 7) & 0x80);
-					Paint.Image[Addr] = Rdata;
-					Paint.Image[Addr + 1] = Rdata2;
-					break;
-				case 3 :
-					Rdata = Paint.Image[Addr] & 0x8f;
-					Rdata = Rdata | ((Color << 4) & 0x70);
-					Paint.Image[Addr] = Rdata;
-					break;
-				case 4 :
-					Rdata = Paint.Image[Addr] & 0xf1;
-					Rdata = Rdata | ((Color << 1) & 0x0e);
-					Paint.Image[Addr] = Rdata;
-					break;
-				case 5 :
-					Rdata = Paint.Image[Addr] & 0xfe;
-					Rdata2 = Paint.Image[Addr + 1] & 0x3f;
-					Rdata = Rdata | ((Color >> 2) & 0x01);
-					Rdata2 = Rdata2 | ((Color << 6) & 0xc0);
-					Paint.Image[Addr] = Rdata;
-					Paint.Image[Addr + 1] = Rdata2;
-					break;
-				case 6 :
-					Rdata = Paint.Image[Addr] & 0xc7;
-					Rdata = Rdata | ((Color << 3) & 0x38);
-					Paint.Image[Addr] = Rdata;
-					break;
-				case 7 :
-					Rdata = Paint.Image[Addr] & 0xf8;
-					Rdata = Rdata | (Color & 0x07);
-					Paint.Image[Addr] = Rdata;
-					break;						
-			}	
-		}
+    }else if(Paint.Scale == 7 || Paint.Scale == 16){
+		UDOUBLE Addr = X / 2  + Y * Paint.WidthByte;
+		UBYTE Rdata = Paint.Image[Addr];
+		Rdata = Rdata & (~(0xF0 >> ((X % 2)*4)));//Clear first, then set value
+		Paint.Image[Addr] = Rdata | ((Color << 4) >> ((X % 2)*4));
+		// printf("Add =  %d ,data = %d\r\n",Addr,Rdata);	
+    }
 }
 
 /******************************************************************************
@@ -315,26 +267,25 @@ parameter:
 ******************************************************************************/
 void Paint_Clear(UWORD Color)
 {
-    if(Paint.Scale == 2 || Paint.Scale == 4) {
+    if(Paint.Scale == 2) {
 		for (UWORD Y = 0; Y < Paint.HeightByte; Y++) {
 			for (UWORD X = 0; X < Paint.WidthByte; X++ ) {//8 pixel =  1 byte
 				UDOUBLE Addr = X + Y*Paint.WidthByte;
 				Paint.Image[Addr] = Color;
 			}
 		}
-	}
-	if(Paint.Scale == 7) {
-		Color = (UBYTE)Color;
-		UWORD Width = (Paint.WidthMemory * 3 % 8 == 0)? (Paint.WidthMemory * 3 / 8 ): (Paint.WidthMemory * 3 / 8 + 1);
+    }else if(Paint.Scale == 4) {
+        for (UWORD Y = 0; Y < Paint.HeightByte; Y++) {
+            for (UWORD X = 0; X < Paint.WidthByte; X++ ) {
+                UDOUBLE Addr = X + Y*Paint.WidthByte;
+                Paint.Image[Addr] = (Color<<6)|(Color<<4)|(Color<<2)|Color;
+            }
+        }
+    }else if(Paint.Scale == 7 || Paint.Scale == 16) {
 		for (UWORD Y = 0; Y < Paint.HeightByte; Y++) {
-			for (UWORD X = 0; X < Width; X++ ) {
-				UDOUBLE Addr = X + Y * Width;
-				if((X + Y * Width)%3 == 0) 
-					Paint.Image[Addr] = ((Color<<5) | (Color<<2) | (Color>>1));							
-				else if((X + Y * Width)%3 == 1) 
-					Paint.Image[Addr] = ((Color<<7) | (Color<<4) | (Color<<1) | (Color>>2));				
-				else if((X + Y * Width)%3 == 2)
-					Paint.Image[Addr] = ((Color<<6) | (Color<<3) |  Color);				
+			for (UWORD X = 0; X < Paint.WidthByte; X++ ) {
+				UDOUBLE Addr = X + Y*Paint.WidthByte;
+				Paint.Image[Addr] = (Color<<4)|Color;
 			}
 		}
 	}
