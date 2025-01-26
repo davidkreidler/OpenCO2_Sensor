@@ -33,9 +33,9 @@ extern bool BatteryMode, comingFromDeepSleep;
 extern uint8_t HWSubRev;
 
 extern uint8_t font;
-sFONT fonts[3][3] = {
+sFONT fonts[2][3] = {
   bahn_big, bahn_mid, bahn_sml,
-  gotham_big, gotham_mid, gotham_sml,
+  //gotham_big, gotham_mid, gotham_sml,
   nothing_big, nothing_mid, bahn_sml
 };
 sFONT big=fonts[font][0];
@@ -230,7 +230,7 @@ void OptionsMenu() {
             break;
           case FONT:
             font += 1;
-            font %= 3;
+            font %= 2;
             changeFont(font);
             preferences.begin("co2-sensor", false);
             preferences.putInt("font", font);
@@ -328,13 +328,6 @@ void displayWelcome() {
   EPD_4IN2_Display(BlackImage);
   EPD_4IN2_Sleep();
 #endif*/
-
-  esp_sleep_pd_config(ESP_PD_DOMAIN_RTC_PERIPH, ESP_PD_OPTION_OFF);     // RTC IO, sensors and ULP co-processor
-  esp_sleep_pd_config(ESP_PD_DOMAIN_RTC_SLOW_MEM, ESP_PD_OPTION_OFF);   // RTC slow memory: auto
-  esp_sleep_pd_config(ESP_PD_DOMAIN_RTC_FAST_MEM, ESP_PD_OPTION_OFF);   // RTC fast memory
-  esp_sleep_pd_config(ESP_PD_DOMAIN_XTAL, ESP_PD_OPTION_OFF);           // XTAL oscillator
-  esp_sleep_pd_config(ESP_PD_DOMAIN_RTC8M, ESP_PD_OPTION_OFF);          // CPU core
-  esp_sleep_pd_config(ESP_PD_DOMAIN_VDDSDIO, ESP_PD_OPTION_OFF);
   esp_deep_sleep_start();
 }
 
@@ -535,8 +528,8 @@ void calculateTempHumStats(int* mintemp, int* maxtemp, int* avgtemp, int* minhum
   *maxhum = value;
 
   uint16_t index;
-  if (overflow) index = NUM_MEASUREMENTS / 3;
-  else          index = ceil(currentIndex / 3.0);
+  if (overflow) index = NUM_MEASUREMENTS / 4;
+  else          index = ceil(currentIndex / 4.0);
   for (int i=0; i<index; i++) {
     value = getTempMeasurement(i);
     if (value < *mintemp) *mintemp = value;
@@ -617,8 +610,8 @@ void displayTempHumHistoryGraph() {
   float yscaletemp = hight / (maxtemp - mintemp);
   float yscalehum = hight / (maxhum - minhum);
   uint16_t index;
-  if (overflow) index = NUM_MEASUREMENTS / 3;
-  else          index = ceil(currentIndex / 3.0);
+  if (overflow) index = NUM_MEASUREMENTS / 4;
+  else          index = ceil(currentIndex / 4.0);
   float stepsPerPixel = index / (float)WIDTH;
 
   Paint_Clear(WHITE);
@@ -799,7 +792,7 @@ void displayOptionsMenu(uint8_t selectedOption) {
   }
   Paint_DrawString_EN(166, 50, (useFahrenheit? "*F":"*C"), &Font24, WHITE, BLACK);
   Paint_DrawNum(149, 100, (int32_t)(font+1), &Font24, BLACK, WHITE);
-  Paint_DrawString_EN(166, 100, "/3", &Font24, WHITE, BLACK);
+  Paint_DrawString_EN(166, 100, "/2", &Font24, WHITE, BLACK);
 
   invertSelected(selectedOption);
   updateDisplay();
