@@ -10,7 +10,7 @@
    - WiFiManager: https://github.com/tzapu/WiFiManager
    - ArduinoMqttClient (if MQTT is defined)
 */
-#define VERSION "v5.5"
+#define VERSION "v5.6"
 
 #define HEIGHT_ABOVE_SEA_LEVEL 50             // Berlin
 #define TZ_DATA "CET-1CEST,M3.5.0,M10.5.0/3"  // Europe/Berlin time zone from https://github.com/nayarsystems/posix_tz_db/blob/master/zones.csv
@@ -92,7 +92,8 @@ RTC_DATA_ATTR float maxBatteryVoltage;
 
 /* TEST_MODE */
 RTC_DATA_ATTR bool TEST_MODE;
-RTC_DATA_ATTR uint16_t sensorStatus, serial0, serial1, serial2;
+RTC_DATA_ATTR uint16_t sensorStatus;
+RTC_DATA_ATTR uint64_t serialNumber;
 
 RTC_DATA_ATTR uint16_t co2 = 400;
 RTC_DATA_ATTR float temperature = 0.0f, humidity = 0.0f;
@@ -363,7 +364,6 @@ void initOnce() {
   preferences.end();
 
   scd4x.stopPeriodicMeasurement();  // stop potentially previously started measurement
-  uint64_t serialNumber;
   scd4x.getSerialNumber(serialNumber);
   scd4x.setSensorAltitude(HEIGHT_ABOVE_SEA_LEVEL);
   scd4x.setAutomaticSelfCalibrationEnabled(1); // Or use setAutomaticSelfCalibrationTarget if needed
