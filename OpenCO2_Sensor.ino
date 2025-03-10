@@ -71,9 +71,9 @@ Adafruit_DotStar strip(1, 40, 39, DOTSTAR_BRG);  // numLEDs, DATAPIN, CLOCKPIN
 
 /* scd4x */
 #include <Arduino.h>
-#include <SensirionI2CScd4x.h>
+#include <SensirionI2cScd4x.h>
 #include <Wire.h>
-SensirionI2CScd4x scd4x;
+SensirionI2cScd4x scd4x;
 
 
 #ifndef ARDUINO_USB_MODE
@@ -363,9 +363,10 @@ void initOnce() {
   preferences.end();
 
   scd4x.stopPeriodicMeasurement();  // stop potentially previously started measurement
-  scd4x.getSerialNumber(serial0, serial1, serial2);
+  uint64_t serialNumber;
+  scd4x.getSerialNumber(serialNumber);
   scd4x.setSensorAltitude(HEIGHT_ABOVE_SEA_LEVEL);
-  scd4x.setAutomaticSelfCalibration(1);
+  scd4x.setAutomaticSelfCalibrationEnabled(1); // Or use setAutomaticSelfCalibrationTarget if needed
   scd4x.setTemperatureOffset(getTempOffset());
   scd4x.startPeriodicMeasurement();
 
@@ -749,7 +750,7 @@ void setup() {
 
   /* scd4x */
   Wire.begin(33, 34);  // green, yellow
-  scd4x.begin(Wire);
+  scd4x.begin(Wire, 0x62); // 0x62 is the default I2C address for SCD4x
 
   USB.onEvent(usbEventCallback);
   usbmsc.isWritable(true);
@@ -812,7 +813,7 @@ void loop() {
   }
 
   bool isDataReady = false;
-  uint16_t ready_error = scd4x.getDataReadyFlag(isDataReady);
+  uint16_t ready_error = scd4x.getDataReadyStatus(isDataReady);
   if (ready_error || !isDataReady) {
     if (BatteryMode && comingFromDeepSleep) goto_deep_sleep(DEEP_SLEEP_TIME/2);
     else goto_light_sleep(LIGHT_SLEEP_TIME/2);
