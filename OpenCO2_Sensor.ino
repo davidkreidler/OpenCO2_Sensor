@@ -459,7 +459,7 @@ void goto_deep_sleep(int ms) {
   /* Wakeup by IO0 button */
   rtc_gpio_pullup_en(BUTTON);
   rtc_gpio_pulldown_dis(BUTTON);
-  esp_sleep_enable_ext1_wakeup_io((1ULL << BUTTON), ESP_EXT1_WAKEUP_ANY_LOW);
+  esp_sleep_enable_ext1_wakeup((1ULL << BUTTON), ESP_EXT1_WAKEUP_ANY_LOW);
 
   /* Keep LED enabled */
   if (LEDonBattery) gpio_hold_en(LED_POWER);
