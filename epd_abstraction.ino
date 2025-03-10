@@ -1165,19 +1165,17 @@ void displayWiFiStrengh() {
 }
 
 void displayinfo() {
-  extern uint16_t serial0, serial1, serial2;
+  extern uint64_t serialNumber;
   Paint_Clear(WHITE);
 
   Paint_DrawString_EN(0, 1, "MAC Address:", &Font16, WHITE, BLACK);
   Paint_DrawString_EN(0, 17, WiFi.macAddress().c_str(), &Font16, WHITE, BLACK);
 
   char serial[19] = "SCD4x:";
-  char hex[5];
-  sprintf(hex, "%04X", serial0);
+  char hex[9];
+  sprintf(hex, "%04X", (uint32_t)(serialNumber >> 32));
   strcat(serial, hex);
-  sprintf(hex, "%04X", serial1);
-  strcat(serial, hex);
-  sprintf(hex, "%04X", serial2);
+  sprintf(hex, "%08X", (uint32_t)(serialNumber & 0xFFFFFFFF));
   strcat(serial, hex);
   Paint_DrawString_EN(0, 33, serial, &Font16, WHITE, BLACK);
 
@@ -1245,7 +1243,7 @@ void displayWriteError(char errorMessage[256]){
 
 /* TEST_MODE */
 void displayWriteTestResults(float voltage, uint16_t sensorStatus) {
-  extern uint16_t serial0, serial1, serial2;
+  extern uint64_t serialNumber;
   char batteryvolt[8] = "";
   dtostrf(voltage, 1, 3, batteryvolt);
   char volt[10] = "V";
@@ -1281,17 +1279,14 @@ void displayWriteTestResults(float voltage, uint16_t sensorStatus) {
   Paint_DrawString_EN(0, 176, mac, &Font12, WHITE, BLACK);
 
   char serial[20] = "Serial:";
-  char hex[5];
-  sprintf(hex, "%04X", serial0);
-  Serial.print(hex);
+  Serial.print("0x");
+  Serial.print((uint32_t)(serialNumber >> 32), HEX);
+  Serial.println((uint32_t)(serialNumber & 0xFFFFFFFF), HEX);
+  char hex[9];
+  sprintf(hex, "%04X", (uint32_t)(serialNumber >> 32));
   strcat(serial, hex);
-  sprintf(hex, "%04X", serial1);
-  Serial.print(hex);
+  sprintf(hex, "%08X", (uint32_t)(serialNumber & 0xFFFFFFFF));
   strcat(serial, hex);
-  sprintf(hex, "%04X", serial2);
-  Serial.println(hex);
-  strcat(serial, hex);
-  //Serial.print('\n');
   Paint_DrawString_EN(0, 188, serial, &Font12, WHITE, BLACK);
 
   Paint_DrawNum(158, 180, (int32_t)refreshes, &Font16, BLACK, WHITE);

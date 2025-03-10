@@ -10,7 +10,7 @@
    - WiFiManager: https://github.com/tzapu/WiFiManager
    - ArduinoMqttClient (if MQTT is defined)
 */
-#define VERSION "v5.5"
+#define VERSION "v5.6"
 
 #define HEIGHT_ABOVE_SEA_LEVEL 50             // Berlin
 #define TZ_DATA "CET-1CEST,M3.5.0,M10.5.0/3"  // Europe/Berlin time zone from https://github.com/nayarsystems/posix_tz_db/blob/master/zones.csv
@@ -71,9 +71,9 @@ Adafruit_DotStar strip(1, 40, 39, DOTSTAR_BRG);  // numLEDs, DATAPIN, CLOCKPIN
 
 /* scd4x */
 #include <Arduino.h>
-#include <SensirionI2CScd4x.h>
+#include <SensirionI2cScd4x.h>
 #include <Wire.h>
-SensirionI2CScd4x scd4x;
+SensirionI2cScd4x scd4x;
 
 
 #ifndef ARDUINO_USB_MODE
@@ -92,7 +92,8 @@ RTC_DATA_ATTR float maxBatteryVoltage;
 
 /* TEST_MODE */
 RTC_DATA_ATTR bool TEST_MODE;
-RTC_DATA_ATTR uint16_t sensorStatus, serial0, serial1, serial2;
+RTC_DATA_ATTR uint16_t sensorStatus;
+RTC_DATA_ATTR uint64_t serialNumber;
 
 RTC_DATA_ATTR uint16_t co2 = 400;
 RTC_DATA_ATTR float temperature = 0.0f, humidity = 0.0f;
@@ -363,9 +364,9 @@ void initOnce() {
   preferences.end();
 
   scd4x.stopPeriodicMeasurement();  // stop potentially previously started measurement
-  scd4x.getSerialNumber(serial0, serial1, serial2);
+  scd4x.getSerialNumber(serialNumber);
   scd4x.setSensorAltitude(HEIGHT_ABOVE_SEA_LEVEL);
-  scd4x.setAutomaticSelfCalibration(1);
+  scd4x.setAutomaticSelfCalibrationEnabled(1); // Or use setAutomaticSelfCalibrationTarget if needed
   scd4x.setTemperatureOffset(getTempOffset());
   scd4x.startPeriodicMeasurement();
 
@@ -749,7 +750,7 @@ void setup() {
 
   /* scd4x */
   Wire.begin(33, 34);  // green, yellow
-  scd4x.begin(Wire);
+  scd4x.begin(Wire, 0x62); // 0x62 is the default I2C address for SCD4x
 
   USB.onEvent(usbEventCallback);
   usbmsc.isWritable(true);
@@ -812,7 +813,7 @@ void loop() {
   }
 
   bool isDataReady = false;
-  uint16_t ready_error = scd4x.getDataReadyFlag(isDataReady);
+  uint16_t ready_error = scd4x.getDataReadyStatus(isDataReady);
   if (ready_error || !isDataReady) {
     if (BatteryMode && comingFromDeepSleep) goto_deep_sleep(DEEP_SLEEP_TIME/2);
     else goto_light_sleep(LIGHT_SLEEP_TIME/2);
