@@ -180,7 +180,7 @@ void HandleRootClient() {
   message += "<style> .container { display: flex; gap: 15px; } .rounded-box { font-family: Verdana, Geneva, sans-serif; width: 400px; height: 300px; border-radius: 25px; position: relative; display: flex; flex-direction: column; justify-content: center; font-size: 4em; border: 4px solid grey; } .descr-text { position: absolute; top: 10px; left: 10px; font-size: 0.5em; } .center-text { font-size: 1.5em; text-align: center; } .unit-text { font-size: 0.5em; } </style>";
   message += "</head>\n";
 
-  message += "<script src='https://cdn.plot.ly/plotly-latest.min.js'></script>\n";
+  message += "<script src='https://cdn.plot.ly/plotly-3.0.1.min.js' charset='utf-8'></script>\n";
   message += "<body style='color: grey; background: black;'>\n";
 
   message += "<div class='container'><div class='rounded-box' style='background-color:#" + getHexColors(co2) + "; color:'grey';'><div class='descr-text'>CO2</div><div class='center-text'><b>" + String(co2) + "</b><div class='unit-text'>ppm</div></div></div>\n";
@@ -615,6 +615,7 @@ void rainbowMode() {
 }
 
 void saveMeasurement(uint16_t co2, float temperature, float humidity) {
+  if (co2 == 0) return; // invalid measurement
   co2measurements[currentIndex] = co2;
   if (!(currentIndex % 4)) { // every 2 minutes
     tempHumMeasurements[currentIndex / 4].temperature = (uint16_t)(temperature * 10);
