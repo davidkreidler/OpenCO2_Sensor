@@ -16,7 +16,7 @@ jobs:
           platforms: |
             - name: esp32:esp32
               source-url: https://raw.githubusercontent.com/espressif/arduino-esp32/gh-pages/package_esp32_index.json
-              version: 3.1.3
+              version: 3.2.0
           libraries: |
             - name: Adafruit DotStar
             - name: Sensirion Core
