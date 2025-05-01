@@ -140,6 +140,9 @@ String GenerateMetrics() {
   String idString = "{id=\"" + String("Open CO2 Sensor") + "\",mac=\"" + WiFi.macAddress().c_str() + "\"}";
 
   message += "# HELP rco2 CO2 value, in ppm\n";
+  message += "# Version: ";
+  message += VERSION;
+  message += "\n";
   message += "# TYPE rco2 gauge\n";
   message += "rco2";
   message += idString;
@@ -192,6 +195,10 @@ void HandleRootClient() {
   message += "<div class='rounded-box'><div class='descr-text'>Humidity</div><div class='center-text'><b>" + String((int)humidity) + "</b><div class='unit-text'>%</div></div></div></div>\n";
   message += "<div id='CO2Plot' style='width:100%;max-width:1400px'></div>\n";
   message += "<div id='TempHumPlot' style='width:100%;max-width:1400px'></div>\n";
+
+  message += "<a href='https://github.com/davidkreidler/OpenCO2_Sensor/releases'>Installed Version: ";
+  message += VERSION;
+  message += "</a>\n";
   message += "<script>\n";
 
   char time[20];
