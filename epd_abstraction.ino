@@ -1173,9 +1173,9 @@ void displayinfo() {
 
   char serial[19] = "SCD4x:";
   char hex[9];
-  sprintf(hex, "%04X", (uint32_t)(serialNumber >> 32));
+  sprintf(hex, "%04X", (unsigned int)(serialNumber >> 32));
   strcat(serial, hex);
-  sprintf(hex, "%08X", (uint32_t)(serialNumber & 0xFFFFFFFF));
+  sprintf(hex, "%08X", (unsigned int)(serialNumber & 0xFFFFFFFF));
   strcat(serial, hex);
   Paint_DrawString_EN(0, 33, serial, &Font16, WHITE, BLACK);
 
@@ -1283,9 +1283,9 @@ void displayWriteTestResults(float voltage, uint16_t sensorStatus) {
   Serial.print((uint32_t)(serialNumber >> 32), HEX);
   Serial.println((uint32_t)(serialNumber & 0xFFFFFFFF), HEX);
   char hex[9];
-  sprintf(hex, "%04X", (uint32_t)(serialNumber >> 32));
+  sprintf(hex, "%04X", (unsigned int)(serialNumber >> 32));
   strcat(serial, hex);
-  sprintf(hex, "%08X", (uint32_t)(serialNumber & 0xFFFFFFFF));
+  sprintf(hex, "%08X", (unsigned int)(serialNumber & 0xFFFFFFFF));
   strcat(serial, hex);
   Paint_DrawString_EN(0, 188, serial, &Font12, WHITE, BLACK);
 
