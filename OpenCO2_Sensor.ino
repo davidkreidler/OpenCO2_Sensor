@@ -10,12 +10,13 @@
    - WiFiManager: https://github.com/tzapu/WiFiManager
    - ArduinoMqttClient (if MQTT is defined)
 */
-#define VERSION "v5.6"
+#define VERSION "v5.7"
 
 #define HEIGHT_ABOVE_SEA_LEVEL 50             // Berlin
 #define TZ_DATA "CET-1CEST,M3.5.0,M10.5.0/3"  // Europe/Berlin time zone from https://github.com/nayarsystems/posix_tz_db/blob/master/zones.csv
 #define LIGHT_SLEEP_TIME 500
-#define DEEP_SLEEP_TIME 29124
+#define DEEP_SLEEP_TIME 29124             // 30 sec
+#define LOW_ENERGY_DEEP_SLEEP_TIME 287924 // 5 min
 #define DEEP_SLEEP_TIME_NO_DISPLAY_UPDATE DEEP_SLEEP_TIME + 965 // offset for no display update
 static unsigned long lastMeasurementTimeMs = 0;
 
@@ -86,7 +87,7 @@ SensirionI2cScd4x scd4x;
 USBMSC usbmsc;
 
 RTC_DATA_ATTR bool USB_ACTIVE = false, initDone = false, BatteryMode = false, comingFromDeepSleep = false;
-RTC_DATA_ATTR bool LEDonBattery, LEDonUSB, useSmoothLEDcolor, invertDisplay, useFahrenheit, useWiFi, english;
+RTC_DATA_ATTR bool LEDonBattery, LEDonUSB, useSmoothLEDcolor, invertDisplay, useFahrenheit, useWiFi, lowEnergyMode, english;
 RTC_DATA_ATTR uint8_t ledbrightness, HWSubRev, font;
 RTC_DATA_ATTR float maxBatteryVoltage;
 
@@ -322,8 +323,13 @@ void loadCredentials() {
 #endif /* MQTT */
 
 float getTempOffset() {
-  if (useWiFi) return 12.2;
-  else return 4.4;
+  if (!BatteryMode) {
+    if (useWiFi) return 12.2;
+    return 4.4;
+  } else {
+    if (lowEnergyMode) return 0.0;
+    return 0.8;
+  }
 }
 
 void initOnce() {
@@ -358,6 +364,7 @@ void initOnce() {
   preferences.begin("co2-sensor", true);
   maxBatteryVoltage = preferences.getFloat("MBV", 3.95);
   useWiFi = preferences.getBool("WiFi", false);
+  lowEnergyMode = preferences.getBool("lowEnergy", false);
   LEDonBattery = preferences.getBool("LEDonBattery", false);
   LEDonUSB = preferences.getBool("LEDonUSB", true);
   ledbrightness = preferences.getInt("ledbrightness", 5);
@@ -375,7 +382,7 @@ void initOnce() {
   scd4x.setSensorAltitude(HEIGHT_ABOVE_SEA_LEVEL);
   scd4x.setAutomaticSelfCalibrationEnabled(1); // Or use setAutomaticSelfCalibrationTarget if needed
   scd4x.setTemperatureOffset(getTempOffset());
-  scd4x.startPeriodicMeasurement();
+  if (!(BatteryMode && lowEnergyMode)) scd4x.startPeriodicMeasurement();
 
   displayInit();
   delay(3000);  // Wait for co2 measurement
@@ -820,29 +827,56 @@ void loop() {
     goto_light_sleep(5000 - (millis() - lastMeasurementTimeMs));
   }
 
-  bool isDataReady = false;
-  uint16_t ready_error = scd4x.getDataReadyStatus(isDataReady);
-  if (ready_error || !isDataReady) {
-    if (BatteryMode && comingFromDeepSleep) goto_deep_sleep(DEEP_SLEEP_TIME/2);
-    else goto_light_sleep(LIGHT_SLEEP_TIME/2);
-    return;  // otherwise continues running!
+  if (!(BatteryMode && lowEnergyMode)) {
+    bool isDataReady = false;
+    uint16_t ready_error = scd4x.getDataReadyStatus(isDataReady);
+    if (ready_error || !isDataReady) {
+      if (BatteryMode && comingFromDeepSleep) goto_deep_sleep(DEEP_SLEEP_TIME/2);
+      else goto_light_sleep(LIGHT_SLEEP_TIME/2);
+      return;  // otherwise continues running!
+    }
   }
 
   // Read co2 measurement
-  uint16_t new_co2 = 400;
+  uint16_t new_co2 = 420;
   float new_temperature = 0.0f;
-  uint16_t error = scd4x.readMeasurement(new_co2, new_temperature, humidity);
+  uint16_t error;
+  if (BatteryMode && lowEnergyMode) {
+    scd4x.stopPeriodicMeasurement();
+    scd4x.wakeUp();
+    scd4x.setTemperatureOffset(getTempOffset());
+    //delay(10);
+    scd4x.measureSingleShot(); // Ignore first measurement after wake up.
+    error = scd4x.measureAndReadSingleShot(new_co2, new_temperature, humidity);
+    scd4x.powerDown();
+  } else {
+    error = scd4x.readMeasurement(new_co2, new_temperature, humidity);
+  }
   lastMeasurementTimeMs = millis();
   if (error) {
-    char errorMessage[256];
-    errorToString(error, errorMessage, 256);
-    displayWriteError(errorMessage);
+    if(TEST_MODE) {
+      char errorMessage[256];
+      errorToString(error, errorMessage, 256);
+      displayWriteError(errorMessage);
+    } else { // retry
+      goto_light_sleep(LIGHT_SLEEP_TIME/2);
+      return;
+    }
   } else {
     extern uint16_t refreshes;
-    if (BatteryMode || (refreshes % 6 == 1)) saveMeasurement(new_co2, new_temperature, humidity);
-    /* don't update in Battery mode, unless CO2 has changed by 3% or temperature by 0.5°C */
+    if (BatteryMode || (refreshes % 6 == 1)) {
+      saveMeasurement(new_co2, new_temperature, humidity);
+
+      if (BatteryMode && lowEnergyMode) { // fill measurements of past 5 min
+        for (int i=0; i<9; i++) {
+          saveMeasurement(new_co2, new_temperature, humidity);
+        }
+      }
+    }
+
+    /* don't update in Battery mode, unless CO2 has changed by 4% or temperature by 0.5°C */
     if (!TEST_MODE && BatteryMode && comingFromDeepSleep) {
-      if ((abs(new_co2 - co2) < (0.03 * co2)) && (fabs(new_temperature - temperature) < 0.5)) {
+      if ((abs(new_co2 - co2) < (0.04 * co2)) && (fabs(new_temperature - temperature) < 0.5)) {
         goto_deep_sleep(DEEP_SLEEP_TIME_NO_DISPLAY_UPDATE);
       }
     }
@@ -893,10 +927,11 @@ void loop() {
   if (BatteryMode) {
     if (!comingFromDeepSleep) {
       scd4x.stopPeriodicMeasurement();
-      scd4x.setTemperatureOffset(0.8);
-      scd4x.startLowPowerPeriodicMeasurement();
+      scd4x.setTemperatureOffset(getTempOffset());
+      if (!lowEnergyMode) scd4x.startLowPowerPeriodicMeasurement();
     }
-    goto_deep_sleep(DEEP_SLEEP_TIME);
+    if (lowEnergyMode) goto_deep_sleep(LOW_ENERGY_DEEP_SLEEP_TIME);
+    else               goto_deep_sleep(DEEP_SLEEP_TIME);
   }
 
   goto_light_sleep(LIGHT_SLEEP_TIME);
