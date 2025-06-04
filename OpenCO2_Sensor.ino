@@ -197,7 +197,7 @@ void HandleRootClient() {
   message += "<div id='CO2Plot' style='width:100%;max-width:1400px'></div>\n";
   message += "<div id='TempHumPlot' style='width:100%;max-width:1400px'></div>\n";
 
-  message += "<a href='https://github.com/davidkreidler/OpenCO2_Sensor/releases'>Installed Version: ";
+  message += "<a target='_blank' rel='noopener noreferrer' href='https://github.com/davidkreidler/OpenCO2_Sensor/releases'>Installed Version: ";
   message += VERSION;
   message += "</a>\n";
   message += "<script>\n";
@@ -237,8 +237,8 @@ void HandleRootClient() {
   server.sendContent(Buffer);
 
   message = "];\n";
-  message += "const data = [{x:times, y:yValues, mode:'lines'}];\n";
-  message += "const layout = {yaxis: { title: 'CO2 (ppm)'}, title: 'History', plot_bgcolor:'black', paper_bgcolor:'black'};\n";
+  message += "const data = [{x:times, y:yValues, mode:'lines', fill: 'tonexty', fillcolor: 'rgba(0, 100, 00, 0.3)', line: {color: '#006400'}}];\n";
+  message += "const layout = {yaxis: {range: [Math.min(...data[0].y), Math.max(...data[0].y) * 1.05], title: {text: 'CO2 (ppm)', font: { color: '#006400',size: 20}}}, title: {text: 'History', font: { color: '#808080', size: 40}}, plot_bgcolor:'black', paper_bgcolor:'black'};\n";
   message += "Plotly.newPlot('CO2Plot', data, layout);\n";
   server.sendContent(message);
 
@@ -269,10 +269,9 @@ void HandleRootClient() {
 
   message = "];\nconst numPoints2 = " + String(index) + ";\n";
   message += "let times2 = generateValues(startTime, endTime, numPoints2).map(time => new Date(time));\n";
-  message += "const data2 = [{x: times2, y: y1Values, name: 'Temperature', mode:'lines'}, ";
-  message += "{x: times2, y: y2Values, name: 'Humidity', yaxis: 'y2', mode:'lines'}];\n";
-  message += "const layout2 = { showlegend: false, yaxis: {title: 'Temperature (" + String(useFahrenheit? "*F" : "*C") ;
-  message += ")'}, yaxis2: { title: 'Humidity (%)', overlaying: 'y', side: 'right'}, plot_bgcolor:'black', paper_bgcolor:'black'};\n";
+  message += "const data2 = [{x: times2, y: y1Values, name: 'Temperature', line: { color: '#FF4500' }, mode:'lines'}, {x: times2, y: y2Values, name: 'Humidity', line: { color: '#1E90FF' }, yaxis: 'y2', mode:'lines'}];\n";
+  message += "const layout2 = { showlegend: false, yaxis: {title: {text: 'Temperature (*" + String(useFahrenheit? "F" : "C");
+  message += ")', font: { color: '#FF4500',size: 20}}}, yaxis2: {title: {text: 'Humidity (%)', font: { color: '#1E90FF',size: 20}}, overlaying: 'y', side: 'right'}, plot_bgcolor:'black', paper_bgcolor:'black'};\n";
   message += "Plotly.newPlot('TempHumPlot', data2, layout2);\n";
 
   message += "</script>\n</body>\n</html>\n";
