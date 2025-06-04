@@ -22,6 +22,7 @@ enum LEDMenuOptions {
   NUM_LED_OPTIONS
 };
 enum DisplayMenuOptions {
+  UPDATE,
   INVERT,
   TEMP_UNIT,
   LANGUAGE,
@@ -55,6 +56,7 @@ const char* EnglishLEDmenuItems[NUM_LED_OPTIONS] = {
   "Exit"
 };
 const char* EnglishOptionsMenuItems[NUM_DISPLAY_OPTIONS] = {
+  "Update",
   "Invert",
   "Unit",
   "English",
@@ -86,6 +88,7 @@ const char* GermanLEDmenuItems[NUM_LED_OPTIONS] = {
   "Beenden"
 };
 const char* GermanOptionsMenuItems[NUM_DISPLAY_OPTIONS] = {
+  "Update",
   "Invert",
   "Einheit",
   "German",

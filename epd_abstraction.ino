@@ -210,6 +210,18 @@ void OptionsMenu() {
       }
       if (mspressed > 1000) { // long press
         switch (selectedOption) {
+          case UPDATE:
+            lowEnergyMode = !lowEnergyMode;
+            preferences.begin("co2-sensor", false);
+            preferences.putBool("lowEnergy", lowEnergyMode);
+            preferences.end();
+
+            if (BatteryMode) {
+              scd4x.stopPeriodicMeasurement();
+              scd4x.setTemperatureOffset(getTempOffset());
+              if (!lowEnergyMode) scd4x.startPeriodicMeasurement();
+            }
+            break;
           case INVERT:
             invertDisplay = !invertDisplay;
             preferences.begin("co2-sensor", false);
@@ -790,9 +802,11 @@ void displayOptionsMenu(uint8_t selectedOption) {
     else         OptionsMenuItem = GermanOptionsMenuItems[i];
     Paint_DrawString_EN(5, 25*(i+1), OptionsMenuItem, &Font24, WHITE, BLACK);
   }
-  Paint_DrawString_EN(166, 50, (useFahrenheit? "*F":"*C"), &Font24, WHITE, BLACK);
-  Paint_DrawNum(149, 100, (int32_t)(font+1), &Font24, BLACK, WHITE);
-  Paint_DrawString_EN(166, 100, "/2", &Font24, WHITE, BLACK);
+  if (lowEnergyMode) Paint_DrawString_EN(200-17*4, 25, "5min", &Font24, WHITE, BLACK);
+  else Paint_DrawString_EN(200-17*5, 25, "30sec", &Font24, WHITE, BLACK);
+  Paint_DrawString_EN(166, 25*3, (useFahrenheit? "*F":"*C"), &Font24, WHITE, BLACK);
+  Paint_DrawNum(149, 25*5, (int32_t)(font+1), &Font24, BLACK, WHITE);
+  Paint_DrawString_EN(166, 25*5, "/2", &Font24, WHITE, BLACK);
 
   invertSelected(selectedOption);
   updateDisplay();
@@ -1225,12 +1239,13 @@ void displayinfo() {
   // only needed for debugging. This interrupts the SCD40
   /*float tOffset;
   scd4x.stopPeriodicMeasurement();
+  delay(10);
   scd4x.getTemperatureOffset(tOffset);
-  if (BatteryMode) scd4x.startLowPowerPeriodicMeasurement();
-  else scd4x.startPeriodicMeasurement();
+  if (!BatteryMode) scd4x.startPeriodicMeasurement();
+  else if (!lowEnergyMode) scd4x.startLowPowerPeriodicMeasurement();
   Paint_DrawString_EN(1, 145, "T_offset:", &Font16, WHITE, BLACK);
   char offset[20];
-  sprintf(offset, "%.1f", tOffset);
+  snprintf(offset, sizeof(offset), "%.2f", tOffset);
   Paint_DrawString_EN(122, 145, offset, &Font16, WHITE, BLACK);*/
 
   updateDisplay();
@@ -1310,6 +1325,15 @@ void displayBattery(uint8_t percentage) {
     for (int y = 145/8; y < 179/8; y++) {
       BlackImage[y+x*25] = ~BlackImage[y+x*25];
     }
+  }
+
+  /* low Energy Mode */
+  if (lowEnergyMode) {
+    Paint_DrawRectangle(97, 13, 115, 47, BLACK, DOT_PIXEL_2X2, DRAW_FILL_EMPTY); //case
+    Paint_DrawLine(103, 10, 109, 10, BLACK, DOT_PIXEL_3X3, LINE_STYLE_SOLID);//nippel
+    Paint_DrawLine(106, 25, 106, 35, BLACK, DOT_PIXEL_2X2, LINE_STYLE_SOLID);//+
+    Paint_DrawLine(102, 30, 110, 30, BLACK, DOT_PIXEL_2X2, LINE_STYLE_SOLID);//+
+    //Xstart, Ystart, Xend, Yend
   }
 #endif /* EINK_1IN54V2 */
 
