@@ -4,13 +4,13 @@
    Arduino board: ESP32S2 Dev Module
    Required Arduino libraries:
    - esp32 waveshare epd
-   - Adafruit DotStar
+   - FastLED
    - Sensirion Core
    - Sensirion I2C SCD4x: https://github.com/Sensirion/arduino-i2c-scd4x
    - WiFiManager: https://github.com/tzapu/WiFiManager
    - ArduinoMqttClient (if MQTT is defined)
 */
-#define VERSION "v5.7"
+#define VERSION "v5.8"
 
 #define HEIGHT_ABOVE_SEA_LEVEL 50             // Berlin
 #define TZ_DATA "CET-1CEST,M3.5.0,M10.5.0/3"  // Europe/Berlin time zone from https://github.com/nayarsystems/posix_tz_db/blob/master/zones.csv
@@ -23,11 +23,12 @@ static unsigned long lastMeasurementTimeMs = 0;
 /* Includes display */
 #include "DEV_Config.h"
 #include "epd_abstraction.h"
-#define DISPLAY_POWER GPIO_NUM_45
-#define LED_POWER GPIO_NUM_9
-#define USB_PRESENT GPIO_NUM_4
+#define DISPLAY_POWER   GPIO_NUM_45
+#define LED_POWER       GPIO_NUM_9
+#define LED_PIN         GPIO_NUM_39
+#define USB_PRESENT     GPIO_NUM_4
 #define BATTERY_VOLTAGE GPIO_NUM_5
-#define BUTTON GPIO_NUM_0
+#define BUTTON          GPIO_NUM_0
 
 /* welcome */
 #include <EEPROM.h>
@@ -65,9 +66,8 @@ WiFiManagerParameter custom_api_token("apikey", "API token", api_token, 32);
 #endif /* MQTT */
 
 /* led */
-#include <Adafruit_DotStar.h>
-#include <SPI.h>
-Adafruit_DotStar strip(1, 40, 39, DOTSTAR_BRG);  // numLEDs, DATAPIN, CLOCKPIN
+#include <FastLED.h>
+CRGB leds[1];
 #include "driver/rtc_io.h"
 
 /* scd4x */
@@ -96,7 +96,7 @@ RTC_DATA_ATTR bool TEST_MODE;
 RTC_DATA_ATTR uint16_t sensorStatus;
 RTC_DATA_ATTR uint64_t serialNumber;
 
-RTC_DATA_ATTR uint16_t co2 = 400;
+RTC_DATA_ATTR uint16_t co2 = 420;
 RTC_DATA_ATTR float temperature = 0.0f, humidity = 0.0f;
 
 RTC_DATA_ATTR uint16_t currentIndex = 0;
@@ -333,24 +333,32 @@ float getTempOffset() {
 
 void initOnce() {
   initEpdOnce();
-  EEPROM.begin(2);  // EEPROM_SIZE
+  //EEPROM.begin(2);  // EEPROM_SIZE
 
-  int welcomeDone = EEPROM.read(0);
-  if (welcomeDone != 1) TEST_MODE = true;
-
+  if (EEPROM.read(0) != 1) TEST_MODE = true;
   if (TEST_MODE) {
-    EEPROM.write(0, 0);  // reset welcome
-    EEPROM.write(1, 2);  // write HWSubRev 2
+    //EEPROM.write(0, 0);  // reset welcome
+    EEPROM.write(1, 3);  // write HWSubRev 3
+    HWSubRev = 3;
     EEPROM.commit();
     preferences.begin("co2-sensor", false);
     preferences.putFloat("MBV", 3.95);  // default maxBatteryVoltage
     preferences.end();
 
-    digitalWrite(LED_POWER, LOW);  // LED on
-    strip.begin();
-    strip.setPixelColor(0, 5, 5, 5);  // index, green, red, blue
-    strip.show();
+    Wire.end();
+    if (HWSubRev < 3) {
+      Wire.begin(33, 34);  // green, yellow
+      digitalWrite(LED_POWER, LOW);   // LED on
+      FastLED.addLeds<APA102, 40, 39, RGB>(leds, 1);
+    } else {
+      Wire.begin(3, 2);
+      digitalWrite(LED_POWER, HIGH);  // LED on
+      FastLED.addLeds<WS2812, LED_PIN, GRB>(leds, 1);
+    }
+    scd4x.begin(Wire, 0x62); // 0x62 is the default I2C address for SCD4x
 
+    leds[0] = CRGB (5, 5, 5);
+    FastLED.show();
     displayInitTestMode();
 
     scd4x.stopPeriodicMeasurement();
@@ -359,7 +367,6 @@ void initOnce() {
     scd4x.performSelfTest(sensorStatus);
   }
 
-  HWSubRev = EEPROM.read(1);
   preferences.begin("co2-sensor", true);
   maxBatteryVoltage = preferences.getFloat("MBV", 3.95);
   useWiFi = preferences.getBool("WiFi", false);
@@ -423,12 +430,14 @@ void setLED(uint16_t co2) {
   updateBatteryMode();
   if ((BatteryMode && !LEDonBattery)
       || (!BatteryMode && !LEDonUSB)) {
-    digitalWrite(LED_POWER, HIGH);  // LED OFF
-    strip.clear();
-    strip.show();
+    if (HWSubRev == 3) digitalWrite(LED_POWER, LOW);  // LED OFF
+    else               digitalWrite(LED_POWER, HIGH); // LED OFF
+    leds[0] = CRGB (0, 0, 0);
+    FastLED.show();
     return;
   }
-  digitalWrite(LED_POWER, LOW);  // LED ON
+  if (HWSubRev == 3) digitalWrite(LED_POWER, HIGH); // LED ON
+  else               digitalWrite(LED_POWER, LOW);  // LED ON
   delay(10);
 
   int red, green, blue;
@@ -438,8 +447,8 @@ void setLED(uint16_t co2) {
   green = (int)(green * (ledbrightness / 100.0));
   blue  = (int)(blue  * (ledbrightness / 100.0));
 
-  strip.setPixelColor(0, green, red, blue);
-  strip.show();
+  leds[0] = CRGB (red, green, blue);
+  FastLED.show();
 }
 
 void lowBatteryMode() {
@@ -536,7 +545,7 @@ void updateBatteryMode() {
 float readBatteryVoltage() {
   // IO5 for voltage divider measurement
   float voltage;
-  if (HWSubRev == 2) voltage = (analogRead(BATTERY_VOLTAGE) * 3.33) / 5358.0;
+  if (HWSubRev > 1) voltage = (analogRead(BATTERY_VOLTAGE) * 3.33) / 5358.0;
   else voltage = (analogRead(BATTERY_VOLTAGE) * 3.33) / 5084.0 + 0.02;
 
   if ((voltage > maxBatteryVoltage) && (voltage < 4.2) && (digitalRead(USB_PRESENT) == LOW)) {
@@ -581,28 +590,8 @@ void calibrate() {
 #include "pictures.h"
 void rainbowMode() {
   displayImage(gImage_rainbow);  // gImage_santa
-  digitalWrite(LED_POWER, LOW);  // LED ON
-
-  // Santa
-  /*for(int j = 0; j < 256; j++) {
-    int red = 0, green = 0, blue = 0;
-
-    if (j < 85) {
-      red = ((float)j / 85.0f) * 255.0f;
-    } else if (j < 170) {
-      green = ((float)(j - 85) / 85.0f) * 255.0f;
-    } else if (j < 256) {
-      red = ((float)(j - 170) / 85.0f) * 255.0f;
-      blue = ((float)(j - 170) / 85.0f) * 255.0f;
-      green = ((float)(j - 170) / 85.0f) * 255.0f;
-    }
-
-    strip.setPixelColor(0, green, red, blue);
-    strip.show();
-    if (j == 255) j=0;
-    if (digitalRead(BUTTON) == 0) return;
-    delay(20);
-  }*/
+  if (HWSubRev == 3) digitalWrite(LED_POWER, HIGH); // LED ON
+  else               digitalWrite(LED_POWER, LOW);  // LED ON
 
   // Rainbow
   for (int j = 0; j < 256; j++) {
@@ -619,8 +608,8 @@ void rainbowMode() {
       green = 255 - blue;
     }
 
-    strip.setPixelColor(0, green, red, blue);
-    strip.show();
+    leds[0] = CRGB (red, green, blue);
+    FastLED.show();
     if (j == 255) j = 0;
     if (digitalRead(BUTTON) == 0) return;
     delay(20);
@@ -761,9 +750,19 @@ void setup() {
   pinMode(BUTTON, INPUT_PULLUP);
   digitalWrite(DISPLAY_POWER, HIGH);
   DEV_Module_Init();
-
+  if (!initDone) {
+    EEPROM.begin(2);  // EEPROM_SIZE
+    HWSubRev = EEPROM.read(1);
+  }
+  
   /* scd4x */
-  Wire.begin(33, 34);  // green, yellow
+  if (HWSubRev < 3) {
+    Wire.begin(33, 34);  // green, yellow
+    FastLED.addLeds<APA102, 40, 39, RGB>(leds, 1);
+  } else {
+    Wire.begin(3, 2);
+    FastLED.addLeds<WS2812, LED_PIN, GRB>(leds, 1);
+  }
   scd4x.begin(Wire, 0x62); // 0x62 is the default I2C address for SCD4x
 
   USB.onEvent(usbEventCallback);
@@ -779,7 +778,6 @@ void setup() {
   pinMode(BATTERY_VOLTAGE, INPUT);
   updateBatteryMode();
 
-  strip.begin();
   if (esp_sleep_get_wakeup_cause() == ESP_SLEEP_WAKEUP_EXT1) {
     if (TEST_MODE) displayWelcome();  // exit TEST_MODE via IO button
     handleButtonPress();
@@ -845,7 +843,7 @@ void loop() {
     scd4x.wakeUp();
     scd4x.setTemperatureOffset(getTempOffset());
     //delay(10);
-    scd4x.measureSingleShot(); // Ignore first measurement after wake up.
+    if (HWSubRev < 3) scd4x.measureSingleShot(); // Ignore first measurement after wake up.
     error = scd4x.measureAndReadSingleShot(new_co2, new_temperature, humidity);
     scd4x.powerDown();
   } else {
@@ -876,7 +874,8 @@ void loop() {
     /* don't update in Battery mode, unless CO2 has changed by 4% or temperature by 0.5°C */
     if (!TEST_MODE && BatteryMode && comingFromDeepSleep) {
       if ((abs(new_co2 - co2) < (0.04 * co2)) && (fabs(new_temperature - temperature) < 0.5)) {
-        goto_deep_sleep(DEEP_SLEEP_TIME_NO_DISPLAY_UPDATE);
+        if (lowEnergyMode) goto_deep_sleep(LOW_ENERGY_DEEP_SLEEP_TIME);
+        else               goto_deep_sleep(DEEP_SLEEP_TIME_NO_DISPLAY_UPDATE);
       }
     }
 
