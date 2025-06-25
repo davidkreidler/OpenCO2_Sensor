@@ -43,16 +43,19 @@ rest:
         unique_id: "d611314f-9010-4d0d-aa3b-37c7f350c82f"
         value_template: >
             {{ value | regex_findall_index("(?:rco2.*})(\d+)") }}
+        unit_of_measurement: "ppm"
       - name: "Temperature"
         unique_id: "d611314f-9010-4d0d-aa3b-37c7f350c821"
         device_class: temperature
         value_template: >
             {{ value | regex_findall_index("(?:atmp.*})((?:\d|\.)+)") }}
+        unit_of_measurement: "°C"
       - name: "Humidity"
         unique_id: "d611314f-9010-4d0d-aa3b-37c7f350c822"
         device_class: humidity
         value_template: >
             {{ value | regex_findall_index("(?:rhum.*})((?:\d|\.)+)") }}
+        unit_of_measurement: "%"
 ```
 
 # 3D-printed housing
