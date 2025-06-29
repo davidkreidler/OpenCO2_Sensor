@@ -63,7 +63,8 @@
 /**
  * delay x ms
 **/
-#define DEV_Delay_ms(__xms) delay(__xms)
+//#define DEV_Delay_ms(__xms) delay(__xms)
+void DEV_Delay_ms(int ms);
 
 /*------------------------------------------------------------------------------------------------------*/
 UBYTE DEV_Module_Init(void);
