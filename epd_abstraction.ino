@@ -222,6 +222,9 @@ void OptionsMenu() {
               if (!lowEnergyMode) scd4x.startPeriodicMeasurement();
             }
             break;
+          case MAX_BATTERY:
+            toggleMaxBattery();
+            break;
           case INVERT:
             invertDisplay = !invertDisplay;
             preferences.begin("co2-sensor", false);
@@ -340,6 +343,7 @@ void displayWelcome() {
   EPD_4IN2_Display(BlackImage);
   EPD_4IN2_Sleep();
 #endif*/
+  esp_sleep_enable_timer_wakeup(60 * 60 * 1000000ULL);
   esp_deep_sleep_start();
 }
 
@@ -804,9 +808,13 @@ void displayOptionsMenu(uint8_t selectedOption) {
   }
   if (lowEnergyMode) Paint_DrawString_EN(200-17*4, 25, "5min", &Font24, WHITE, BLACK);
   else Paint_DrawString_EN(200-17*5, 25, "30sec", &Font24, WHITE, BLACK);
-  Paint_DrawString_EN(166, 25*3, (useFahrenheit? "*F":"*C"), &Font24, WHITE, BLACK);
-  Paint_DrawNum(149, 25*5, (int32_t)(font+1), &Font24, BLACK, WHITE);
-  Paint_DrawString_EN(166, 25*5, "/2", &Font24, WHITE, BLACK);
+
+  if (limitMaxBattery  && HWSubRev > 2) Paint_DrawString_EN(200-17*4, 25*2, "~80%", &Font24, WHITE, BLACK);
+  else Paint_DrawString_EN(200-17*4, 25*2, "100%", &Font24, WHITE, BLACK);
+
+  Paint_DrawString_EN(166, 25*4, (useFahrenheit? "*F":"*C"), &Font24, WHITE, BLACK);
+  Paint_DrawNum(149, 25*6, (int32_t)(font+1), &Font24, BLACK, WHITE);
+  Paint_DrawString_EN(166, 25*6, "/2", &Font24, WHITE, BLACK);
 
   invertSelected(selectedOption);
   updateDisplay();

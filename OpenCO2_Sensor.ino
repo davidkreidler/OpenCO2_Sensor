@@ -29,6 +29,7 @@ static unsigned long lastMeasurementTimeMs = 0;
 #define USB_PRESENT     GPIO_NUM_4
 #define BATTERY_VOLTAGE GPIO_NUM_5
 #define BUTTON          GPIO_NUM_0
+#define DISABLE_CHARGING GPIO_NUM_10
 
 /* welcome */
 #include <EEPROM.h>
@@ -87,7 +88,7 @@ SensirionI2cScd4x scd4x;
 USBMSC usbmsc;
 
 RTC_DATA_ATTR bool USB_ACTIVE = false, initDone = false, BatteryMode = false, comingFromDeepSleep = false;
-RTC_DATA_ATTR bool LEDonBattery, LEDonUSB, useSmoothLEDcolor, invertDisplay, useFahrenheit, useWiFi, lowEnergyMode, english;
+RTC_DATA_ATTR bool LEDonBattery, LEDonUSB, useSmoothLEDcolor, invertDisplay, useFahrenheit, useWiFi, lowEnergyMode, english, limitMaxBattery;
 RTC_DATA_ATTR uint8_t ledbrightness, HWSubRev, font;
 RTC_DATA_ATTR float maxBatteryVoltage;
 
@@ -333,11 +334,9 @@ float getTempOffset() {
 
 void initOnce() {
   initEpdOnce();
-  //EEPROM.begin(2);  // EEPROM_SIZE
 
   if (EEPROM.read(0) != 1) TEST_MODE = true;
   if (TEST_MODE) {
-    //EEPROM.write(0, 0);  // reset welcome
     EEPROM.write(1, 3);  // write HWSubRev 3
     HWSubRev = 3;
     EEPROM.commit();
@@ -374,6 +373,7 @@ void initOnce() {
   LEDonBattery = preferences.getBool("LEDonBattery", false);
   LEDonUSB = preferences.getBool("LEDonUSB", true);
   ledbrightness = preferences.getInt("ledbrightness", 5);
+  limitMaxBattery = preferences.getBool("limitMaxBattery", true);
   font = preferences.getInt("font", 0);
   if (font == 2) font = 1; // remove gotham font
   changeFont(font);
@@ -555,6 +555,27 @@ float readBatteryVoltage() {
     preferences.end();
   }
   return voltage;
+}
+
+int counter = 0;
+void updateCharging() {
+  if (!BatteryMode && limitMaxBattery) {
+    float voltage = readBatteryVoltage();
+    if      (voltage > 4.0 && counter < 13) counter++; // prevent hysteresis
+    else if (voltage > 3.9 && counter > 12) {
+      digitalWrite(DISABLE_CHARGING, HIGH);
+    } else {
+      digitalWrite(DISABLE_CHARGING, LOW);
+      counter = 0;
+    }
+  }
+}
+void toggleMaxBattery() {
+    limitMaxBattery = !limitMaxBattery;
+    preferences.begin("fsensor", false);
+    preferences.putBool("limitMaxBattery", limitMaxBattery);
+    preferences.end();
+    updateCharging();
 }
 
 uint8_t calcBatteryPercentage(float voltage) {
@@ -748,6 +769,8 @@ void setup() {
   pinMode(DISPLAY_POWER, OUTPUT);
   pinMode(LED_POWER, OUTPUT);
   pinMode(BUTTON, INPUT_PULLUP);
+  pinMode(DISABLE_CHARGING, OUTPUT);
+
   digitalWrite(DISPLAY_POWER, HIGH);
   DEV_Module_Init();
   if (!initDone) {
@@ -799,8 +822,9 @@ void setup() {
 
 
 void loop() {
-  if (!useWiFi && esp_sleep_get_wakeup_cause() == ESP_SLEEP_WAKEUP_GPIO) handleButtonPress();
+  if ((!useWiFi || (lowEnergyMode && BatteryMode)) && esp_sleep_get_wakeup_cause() == ESP_SLEEP_WAKEUP_GPIO) handleButtonPress();
   updateBatteryMode();  // check again in USB Power mode
+  updateCharging();
   measureESP32temperature();
 
   if (useWiFi && !BatteryMode) {
