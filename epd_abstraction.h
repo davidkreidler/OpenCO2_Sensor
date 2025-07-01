@@ -23,6 +23,7 @@ enum LEDMenuOptions {
 };
 enum DisplayMenuOptions {
   UPDATE,
+  MAX_BATTERY,
   INVERT,
   TEMP_UNIT,
   LANGUAGE,
@@ -57,6 +58,7 @@ const char* EnglishLEDmenuItems[NUM_LED_OPTIONS] = {
 };
 const char* EnglishOptionsMenuItems[NUM_DISPLAY_OPTIONS] = {
   "Update",
+  "Battery",
   "Invert",
   "Unit",
   "English",
@@ -89,6 +91,7 @@ const char* GermanLEDmenuItems[NUM_LED_OPTIONS] = {
 };
 const char* GermanOptionsMenuItems[NUM_DISPLAY_OPTIONS] = {
   "Update",
+  "Battery",
   "Invert",
   "Einheit",
   "German",

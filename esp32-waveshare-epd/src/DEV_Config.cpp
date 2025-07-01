@@ -92,3 +92,13 @@ void DEV_SPI_WriteByte(UBYTE data)
     digitalWrite(EPD_CS_PIN, GPIO_PIN_SET);
     //SPI.endTransaction();	
 }
+
+void DEV_Delay_ms(int ms) {
+    //delay(ms);
+    extern bool BatteryMode;
+    if (!BatteryMode || ms < 10) delay(ms);
+    else {
+        esp_sleep_enable_timer_wakeup(ms * 1000);
+        esp_light_sleep_start();
+    }
+}

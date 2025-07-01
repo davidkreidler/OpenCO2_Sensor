@@ -18,7 +18,7 @@ jobs:
               source-url: https://raw.githubusercontent.com/espressif/arduino-esp32/gh-pages/package_esp32_index.json
               version: 3.2.0
           libraries: |
-            - name: Adafruit DotStar
+            - name: FastLED
             - name: Sensirion Core
             - name: Sensirion I2C SCD4x
             - name: WiFiManager
