@@ -363,7 +363,8 @@ void initOnce() {
     scd4x.stopPeriodicMeasurement();
     // scd4x.performFactoryReset();
     // delay(100);
-    scd4x.performSelfTest(sensorStatus);
+    int16_t selfTest = scd4x.performSelfTest(sensorStatus);
+    if (selfTest != 0 /*NO_ERROR*/) sensorStatus=99;
   }
 
   preferences.begin("co2-sensor", true);
@@ -848,7 +849,7 @@ void loop() {
     goto_light_sleep(5000 - (millis() - lastMeasurementTimeMs));
   }
 
-  if (!(BatteryMode && lowEnergyMode)) {
+  if (!(BatteryMode && lowEnergyMode) && !TEST_MODE) {
     bool isDataReady = false;
     uint16_t ready_error = scd4x.getDataReadyStatus(isDataReady);
     if (ready_error || !isDataReady) {
