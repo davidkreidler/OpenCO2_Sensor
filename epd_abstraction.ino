@@ -222,6 +222,9 @@ void OptionsMenu() {
               if (!lowEnergyMode) scd4x.startPeriodicMeasurement();
             }
             break;
+          case MAX_BATTERY:
+            toggleMaxBattery();
+            break;
           case INVERT:
             invertDisplay = !invertDisplay;
             preferences.begin("co2-sensor", false);
@@ -340,6 +343,7 @@ void displayWelcome() {
   EPD_4IN2_Display(BlackImage);
   EPD_4IN2_Sleep();
 #endif*/
+  esp_sleep_enable_timer_wakeup(60 * 60 * 1000000ULL);
   esp_deep_sleep_start();
 }
 
@@ -402,11 +406,11 @@ void displayLowBattery() {
   Paint_DrawRectangle(150,  55, 160, 75, WHITE, DOT_PIXEL_1X1, DRAW_FILL_FULL);
   Paint_DrawLine(      60, 100, 140, 30, WHITE, DOT_PIXEL_3X3, LINE_STYLE_SOLID);
   if (english) {
-    Paint_DrawString_EN(45, 120, "Charge", &Font20, BLACK, WHITE);
-    Paint_DrawString_EN(45, 145, "Battery", &Font20, BLACK, WHITE);
+    Paint_DrawString_EN(32, 120, "Charge", &Font24, BLACK, WHITE);
+    Paint_DrawString_EN(32, 150, "Battery", &Font24, BLACK, WHITE);
   } else {
-    Paint_DrawString_EN(45, 120, "Batterie", &Font20, BLACK, WHITE);
-    Paint_DrawString_EN(45, 145, "aufladen", &Font20, BLACK, WHITE);
+    Paint_DrawString_EN(32, 120, "Batterie", &Font24, BLACK, WHITE);
+    Paint_DrawString_EN(32, 150, "aufladen", &Font24, BLACK, WHITE);
   }
 
 #ifdef EINK_1IN54V2
@@ -430,7 +434,7 @@ void displayWriteMeasuerments(uint16_t co2, float temperature, float humidity) {
     else if (co2 < 1000) Paint_DrawNum(30, 65, co2, &big, BLACK, WHITE);
     else                 Paint_DrawNum( 6, 65, co2, &big, BLACK, WHITE);
     /*Paint_DrawString_EN(100, 150, "CO", &Font24, WHITE, BLACK);
-    Paint_DrawNum(131, 160, 2, &Font20, BLACK, WHITE);*/
+    Paint_DrawNum(131, 160, 2, &Font24, BLACK, WHITE);*/
     Paint_DrawString_EN(144, 150, "ppm", &Font24, WHITE, BLACK);
 
     /* temperature */
@@ -457,7 +461,7 @@ void displayWriteMeasuerments(uint16_t co2, float temperature, float humidity) {
     if      (co2 > 9999) Paint_DrawNum(102, 88, co2, &big, BLACK, WHITE);
     else if (co2 < 1000) Paint_DrawNum(196, 88, co2, &big, BLACK, WHITE);
     else                 Paint_DrawNum(149, 88, co2, &big, BLACK, WHITE);
-    Paint_DrawString_EN(337, 143, "ppmn", &sml, WHITE, BLACK);
+    Paint_DrawString_EN(337, 143, "ppm", &Font24, WHITE, BLACK);
 
     /* devider lines */
              // Xstart,Ystart,Xend,Yend
@@ -804,9 +808,13 @@ void displayOptionsMenu(uint8_t selectedOption) {
   }
   if (lowEnergyMode) Paint_DrawString_EN(200-17*4, 25, "5min", &Font24, WHITE, BLACK);
   else Paint_DrawString_EN(200-17*5, 25, "30sec", &Font24, WHITE, BLACK);
-  Paint_DrawString_EN(166, 25*3, (useFahrenheit? "*F":"*C"), &Font24, WHITE, BLACK);
-  Paint_DrawNum(149, 25*5, (int32_t)(font+1), &Font24, BLACK, WHITE);
-  Paint_DrawString_EN(166, 25*5, "/2", &Font24, WHITE, BLACK);
+
+  if (limitMaxBattery  && HWSubRev > 2) Paint_DrawString_EN(200-17*4, 25*2, "~80%", &Font24, WHITE, BLACK);
+  else Paint_DrawString_EN(200-17*4, 25*2, "100%", &Font24, WHITE, BLACK);
+
+  Paint_DrawString_EN(166, 25*4, (useFahrenheit? "*F":"*C"), &Font24, WHITE, BLACK);
+  Paint_DrawNum(149, 25*6, (int32_t)(font+1), &Font24, BLACK, WHITE);
+  Paint_DrawString_EN(166, 25*6, "/2", &Font24, WHITE, BLACK);
 
   invertSelected(selectedOption);
   updateDisplay();
@@ -970,42 +978,6 @@ void displayTicTacToe() {
   return;
 }
 
-void displayFlappyBird() {
-  int birdpos = 100;
-#define numObsticals 5
-  int obsticals[numObsticals] = {100,90,110,110,100};
-  int frame = 0;
-  int xpos;
-  
-  if (comingFromDeepSleep && HWSubRev > 1) {
-    Paint_Clear(WHITE);
-    EPD_1IN54_V2_Init_Partial_After_Powerdown();
-    EPD_1IN54_V2_writePrevImage(BlackImage);
-  } else {
-    EPD_1IN54_V2_Init_Partial();
-  }
-
-  while (birdpos > 0 && birdpos < 200) {
-    Paint_Clear(WHITE);
-
-    if (digitalRead(BUTTON) == 0) birdpos -= 10;
-    else                          birdpos += 10;
-    Paint_DrawString_EN(20, birdpos, "X", &Font24, WHITE, BLACK);
-
-    for (int i = 0; i < numObsticals; i++) {
-      xpos =  (i+1)*40 - frame*3;
-               // Xstart,Ystart,Xend,Yend
-      Paint_DrawLine(xpos, 0, xpos, obsticals[i], BLACK, DOT_PIXEL_4X4, LINE_STYLE_SOLID); //top
-      Paint_DrawLine(xpos, 200, xpos, obsticals[i]+50, BLACK, DOT_PIXEL_4X4, LINE_STYLE_SOLID); //buttum
-    }
-    frame++;
-    frame %= 200;
-
-    Paint_DrawNum(200-7*3, 200-12, frame, &Font12, BLACK, WHITE);
-    EPD_1IN54_V2_DisplayPart(BlackImage);
-  }
-}
-
 void displayCalibrationWarning() {
   Paint_Clear(BLACK);
 
@@ -1019,12 +991,12 @@ void displayCalibrationWarning() {
   Paint_DrawLine(  37, 120, 163, 120, WHITE, DOT_PIXEL_4X4, LINE_STYLE_SOLID);
 
   if (english) {
-    Paint_DrawString_EN(16, 132, "Calibration!", &Font20, BLACK, WHITE);
+    Paint_DrawString_EN(6, 128, "Calibration", &Font24, BLACK, WHITE);
     Paint_DrawString_EN(1, 152, "Put Sensor outside", &Font16, BLACK, WHITE);
     Paint_DrawString_EN(1, 168, "for 3+ minutes. Or", &Font16, BLACK, WHITE);
     Paint_DrawString_EN(1, 184, "hold knob to stop", &Font16, BLACK, WHITE);
   } else {
-    Paint_DrawString_EN(16, 132, "Kalibration!", &Font20, BLACK, WHITE);
+    Paint_DrawString_EN(6, 128, "Kalibration", &Font24, BLACK, WHITE);
     Paint_DrawString_EN(1, 152, "Sensor fur 3+ min.", &Font16, BLACK, WHITE);
     Paint_DrawString_EN(1, 168, "nach drausen legen", &Font16, BLACK, WHITE);
     Paint_DrawString_EN(1, 184, "Knopf = abbrechen", &Font16, BLACK, WHITE);
@@ -1058,7 +1030,7 @@ void displayWiFi(bool useWiFi) {
         esp_qrcode_config_t cfg = ESP_QRCODE_CONFIG();
         esp_qrcode_generate(&cfg, buffer);
 
-        Paint_DrawString_EN(16, 200-21, "openco2:9925", &Font20, BLACK, WHITE);
+        Paint_DrawString_EN(34, 200-21, "openco2:9925", &Font16, BLACK, WHITE);
       } else {
         char const *buffer = "WIFI:T:;S:OpenCO2 Sensor;P:;;";
         esp_qrcode_config_t cfg = ESP_QRCODE_CONFIG();
@@ -1253,7 +1225,7 @@ void displayinfo() {
 
 void displayWriteError(char errorMessage[256]){
   Paint_Clear(WHITE);
-  Paint_DrawString_EN(5, 40, errorMessage, &Font20, WHITE, BLACK);
+  Paint_DrawString_EN(5, 40, errorMessage, &Font16, WHITE, BLACK);
 }
 
 /* TEST_MODE */

@@ -137,7 +137,7 @@ Enable Wi-Fi via the Menu button, in an area where no previously known network i
 
 # Dependencies
 
-* [Adafruit DotStar](https://github.com/adafruit/Adafruit_DotStar)
+* [FastLED](https://github.com/FastLED/FastLED)
 * [Sensirion Core](https://github.com/Sensirion/arduino-core)
 * [Sensirion I2C SCD4x Arduino Library](https://github.com/Sensirion/arduino-i2c-scd4x)
 * [WiFiManager](https://github.com/tzapu/WiFiManager)
