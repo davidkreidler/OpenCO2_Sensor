@@ -1005,6 +1005,44 @@ void displayCalibrationWarning() {
   updateDisplay();
 }
 
+void DisplayCalibrationFail() {
+  Paint_Clear(BLACK);
+
+  // Exclamation Mark !
+  Paint_DrawLine( 100,  50, 100,  85, WHITE, DOT_PIXEL_4X4, LINE_STYLE_SOLID);
+  Paint_DrawCircle(100, 105,   5, WHITE, DOT_PIXEL_1X1, DRAW_FILL_FULL);
+
+                // Xstart,Ystart,Xend,Yend
+  Paint_DrawLine( 100,  20,  35, 120, WHITE, DOT_PIXEL_3X3, LINE_STYLE_SOLID);
+  Paint_DrawLine( 100,  20, 165, 120, WHITE, DOT_PIXEL_3X3, LINE_STYLE_SOLID);
+  Paint_DrawLine(  37, 120, 163, 120, WHITE, DOT_PIXEL_4X4, LINE_STYLE_SOLID);
+
+  if (english) {
+    Paint_DrawString_EN(6, 128, "Calibration", &Font24, BLACK, WHITE);
+    Paint_DrawString_EN(6, 152, "FAILED", &Font24, BLACK, WHITE);
+  } else {
+    Paint_DrawString_EN(6, 128, "Kalibration", &Font24, BLACK, WHITE);
+    Paint_DrawString_EN(6, 152, "FEHLGESCHLAGEN", &Font24, BLACK, WHITE);
+  }
+
+  updateDisplay();
+}
+
+void DisplayCalibrationResult(int correction) {
+  Paint_Clear(BLACK);
+
+  Paint_DrawString_EN(74, 100, "OK!", &Font24, BLACK, WHITE);
+  Paint_DrawString_EN(6, 152, "correction:", &Font24, BLACK, WHITE);
+
+  char acorrection[16];
+  if (correction < 0) {
+         snprintf(acorrection, sizeof(acorrection), "-%d ppm", -correction);
+  } else snprintf(acorrection, sizeof(acorrection),  "%d ppm",  correction);
+  Paint_DrawString_EN(0, 176, acorrection, &Font24, BLACK, WHITE);
+
+  updateDisplay();
+}
+
 void displayWiFi(bool useWiFi) {
   Paint_Clear(BLACK);
 

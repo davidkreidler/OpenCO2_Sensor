@@ -10,7 +10,7 @@
    - WiFiManager: https://github.com/tzapu/WiFiManager
    - ArduinoMqttClient (if MQTT is defined)
 */
-#define VERSION "v5.8"
+#define VERSION "v5.9"
 
 #define HEIGHT_ABOVE_SEA_LEVEL 50             // Berlin
 #define TZ_DATA "CET-1CEST,M3.5.0,M10.5.0/3"  // Europe/Berlin time zone from https://github.com/nayarsystems/posix_tz_db/blob/master/zones.csv
@@ -605,7 +605,13 @@ void calibrate() {
   delay(500);
   uint16_t frcCorrection;
   scd4x.performForcedRecalibration((uint16_t)420, frcCorrection);
-  delay(400);
+  
+  if (frcCorrection == 65535) DisplayCalibrationFail();
+  else {
+    int correction = frcCorrection - 32768;
+    DisplayCalibrationResult(correction);
+  }
+  while (digitalRead(BUTTON) != 0) delay(400);  // wait for button press
   ESP.restart();
 }
 
@@ -741,6 +747,7 @@ void startWiFi() {
 #endif /* MQTT */
 
 #ifdef airgradient
+  delay(100);
   server.on("/", HandleRootClient);
   server.on("/metrics", HandleRoot);
   server.on("/favicon.ico", handleFavicon);

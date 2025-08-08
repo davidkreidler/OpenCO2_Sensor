@@ -124,6 +124,8 @@ void displayBattery(uint8_t percentage);
 void updateDisplay();
 void displayImage(const unsigned char* image_buffer);
 void displayCalibrationWarning();
+void DisplayCalibrationFail();
+void DisplayCalibrationResult(int correction);
 void displayWiFi(bool useWiFi);
 void displayWiFiStrengh();
 
