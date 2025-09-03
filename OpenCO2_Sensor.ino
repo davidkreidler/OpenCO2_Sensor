@@ -10,13 +10,12 @@
    - WiFiManager: https://github.com/tzapu/WiFiManager
    - ArduinoMqttClient (if MQTT is defined)
 */
-#define VERSION "v5.9"
+#define VERSION "v6.0"
 
 #define HEIGHT_ABOVE_SEA_LEVEL 50             // Berlin
 #define TZ_DATA "CET-1CEST,M3.5.0,M10.5.0/3"  // Europe/Berlin time zone from https://github.com/nayarsystems/posix_tz_db/blob/master/zones.csv
 #define LIGHT_SLEEP_TIME 500
 #define DEEP_SLEEP_TIME 29124             // 30 sec
-#define LOW_ENERGY_DEEP_SLEEP_TIME 287924 // 5 min
 #define DEEP_SLEEP_TIME_NO_DISPLAY_UPDATE DEEP_SLEEP_TIME + 965 // offset for no display update
 static unsigned long lastMeasurementTimeMs = 0;
 
@@ -77,19 +76,13 @@ CRGB leds[1];
 #include <Wire.h>
 SensirionI2cScd4x scd4x;
 
-
-#ifndef ARDUINO_USB_MODE
-#error This ESP32 SoC has no Native USB interface
-#elif ARDUINO_USB_MODE == 1
-#error This sketch should be used when USB is in OTG mode and MSC On Boot enabled
-#endif
 #include "USB.h"
-#include <USBMSC.h>
-USBMSC usbmsc;
+#include "FirmwareMSC.h"
+FirmwareMSC MSC_Update;
 
 RTC_DATA_ATTR bool USB_ACTIVE = false, initDone = false, BatteryMode = false, comingFromDeepSleep = false;
-RTC_DATA_ATTR bool LEDonBattery, LEDonUSB, useSmoothLEDcolor, invertDisplay, useFahrenheit, useWiFi, lowEnergyMode, english, limitMaxBattery;
-RTC_DATA_ATTR uint8_t ledbrightness, HWSubRev, font;
+RTC_DATA_ATTR bool LEDonBattery, LEDonUSB, useSmoothLEDcolor, invertDisplay, useFahrenheit, useWiFi, english, limitMaxBattery;
+RTC_DATA_ATTR uint8_t ledbrightness, HWSubRev, font, skipMeasurement = 10;
 RTC_DATA_ATTR float maxBatteryVoltage;
 
 /* TEST_MODE */
@@ -327,8 +320,7 @@ float getTempOffset() {
     if (useWiFi) return 12.2;
     return 4.4;
   } else {
-    if (lowEnergyMode) return 0.0;
-    return 0.8;
+    return 0.0; // was with periodic measurment 0.8
   }
 }
 
@@ -348,7 +340,7 @@ void initOnce() {
     if (HWSubRev < 3) {
       Wire.begin(33, 34);  // green, yellow
       digitalWrite(LED_POWER, LOW);   // LED on
-      FastLED.addLeds<APA102, 40, 39, RGB>(leds, 1);
+      FastLED.addLeds<APA102, 40, 39, BGR>(leds, 1);
     } else {
       Wire.begin(3, 2);
       digitalWrite(LED_POWER, HIGH);  // LED on
@@ -370,7 +362,6 @@ void initOnce() {
   preferences.begin("co2-sensor", true);
   maxBatteryVoltage = preferences.getFloat("MBV", 3.95);
   useWiFi = preferences.getBool("WiFi", false);
-  lowEnergyMode = preferences.getBool("lowEnergy", false);
   LEDonBattery = preferences.getBool("LEDonBattery", false);
   LEDonUSB = preferences.getBool("LEDonUSB", true);
   ledbrightness = preferences.getInt("ledbrightness", 5);
@@ -389,7 +380,7 @@ void initOnce() {
   scd4x.setSensorAltitude(HEIGHT_ABOVE_SEA_LEVEL);
   scd4x.setAutomaticSelfCalibrationEnabled(1); // Or use setAutomaticSelfCalibrationTarget if needed
   scd4x.setTemperatureOffset(getTempOffset());
-  if (!(BatteryMode && lowEnergyMode)) scd4x.startPeriodicMeasurement();
+  if (!BatteryMode) scd4x.startPeriodicMeasurement();
 
   displayInit();
   delay(3000);  // Wait for co2 measurement
@@ -594,6 +585,9 @@ void calibrate() {
   /* Only run this, if calibration is needed!
    let the Sensor run outside for 3+ minutes before.
  */
+  scd4x.stopPeriodicMeasurement();
+  scd4x.wakeUp();
+  scd4x.startLowPowerPeriodicMeasurement();
   displayCalibrationWarning();
   delay(500);
   for (int i = 0; i < 180; i++) {
@@ -789,15 +783,13 @@ void setup() {
   /* scd4x */
   if (HWSubRev < 3) {
     Wire.begin(33, 34);  // green, yellow
-    FastLED.addLeds<APA102, 40, 39, RGB>(leds, 1);
+    FastLED.addLeds<APA102, 40, 39, BGR>(leds, 1);
   } else {
     Wire.begin(3, 2);
     FastLED.addLeds<WS2812, LED_PIN, GRB>(leds, 1);
   }
   scd4x.begin(Wire, 0x62); // 0x62 is the default I2C address for SCD4x
 
-  USB.onEvent(usbEventCallback);
-  usbmsc.isWritable(true);
   if (!initDone) initOnce();
 
 #if ARDUINO_USB_CDC_ON_BOOT && !ARDUINO_USB_MODE
@@ -818,7 +810,6 @@ void setup() {
     delay(1);
     setLED(co2);
 
-    scd4x.stopPeriodicMeasurement();  // stop low power measurement
     scd4x.setTemperatureOffset(getTempOffset());
     scd4x.startPeriodicMeasurement();
     /* Wait for co2 measurement */
@@ -826,11 +817,17 @@ void setup() {
   }
 
   if (useWiFi && !BatteryMode) startWiFi();
+
+  if (!BatteryMode && !comingFromDeepSleep) {
+    USB.onEvent(usbEventCallback);
+    MSC_Update.begin();
+    USB.begin();
+  }
 }
 
 
 void loop() {
-  if ((!useWiFi || (lowEnergyMode && BatteryMode)) && esp_sleep_get_wakeup_cause() == ESP_SLEEP_WAKEUP_GPIO) handleButtonPress();
+  if ((!useWiFi || BatteryMode) && esp_sleep_get_wakeup_cause() == ESP_SLEEP_WAKEUP_GPIO) handleButtonPress();
   updateBatteryMode();  // check again in USB Power mode
   updateCharging();
   measureESP32temperature();
@@ -856,7 +853,7 @@ void loop() {
     goto_light_sleep(5000 - (millis() - lastMeasurementTimeMs));
   }
 
-  if (!(BatteryMode && lowEnergyMode) && !TEST_MODE) {
+  if (!BatteryMode && !TEST_MODE) {
     bool isDataReady = false;
     uint16_t ready_error = scd4x.getDataReadyStatus(isDataReady);
     if (ready_error || !isDataReady) {
@@ -870,11 +867,27 @@ void loop() {
   uint16_t new_co2 = 420;
   float new_temperature = 0.0f;
   uint16_t error;
-  if (BatteryMode && lowEnergyMode) {
-    scd4x.stopPeriodicMeasurement();
+  if (BatteryMode) {
+    if (!comingFromDeepSleep) scd4x.stopPeriodicMeasurement();
     scd4x.wakeUp();
     scd4x.setTemperatureOffset(getTempOffset());
-    //delay(10);
+
+    /* check if temp/humidity changed */
+    scd4x.measureSingleShotRhtOnly();
+    uint16_t dummyCo2; // CO2 output is returned as 0 ppm
+    float new_humidity = 0.0f;
+    error = scd4x.readMeasurement(dummyCo2, new_temperature, new_humidity);
+    if (!error
+    && (skipMeasurement > 1) 
+    && (fabs(new_temperature - temperature) < 0.5)
+    && (fabs(new_humidity - humidity) < 2.0)) {
+      scd4x.powerDown();
+      skipMeasurement--;
+      saveMeasurement(co2, new_temperature, new_humidity);
+      goto_deep_sleep(DEEP_SLEEP_TIME_NO_DISPLAY_UPDATE);
+    }
+    skipMeasurement = 10; // force update every 5 minutes
+
     if (HWSubRev < 3) scd4x.measureSingleShot(); // Ignore first measurement after wake up.
     error = scd4x.measureAndReadSingleShot(new_co2, new_temperature, humidity);
     scd4x.powerDown();
@@ -895,19 +908,12 @@ void loop() {
     extern uint16_t refreshes;
     if (BatteryMode || (refreshes % 6 == 1)) {
       saveMeasurement(new_co2, new_temperature, humidity);
-
-      if (BatteryMode && lowEnergyMode) { // fill measurements of past 5 min
-        for (int i=0; i<9; i++) {
-          saveMeasurement(new_co2, new_temperature, humidity);
-        }
-      }
     }
 
     /* don't update in Battery mode, unless CO2 has changed by 4% or temperature by 0.5°C */
     if (!TEST_MODE && BatteryMode && comingFromDeepSleep) {
       if ((abs(new_co2 - co2) < (0.04 * co2)) && (fabs(new_temperature - temperature) < 0.5)) {
-        if (lowEnergyMode) goto_deep_sleep(LOW_ENERGY_DEEP_SLEEP_TIME);
-        else               goto_deep_sleep(DEEP_SLEEP_TIME_NO_DISPLAY_UPDATE);
+        goto_deep_sleep(DEEP_SLEEP_TIME_NO_DISPLAY_UPDATE);
       }
     }
 
@@ -957,11 +963,11 @@ void loop() {
   if (BatteryMode) {
     if (!comingFromDeepSleep) {
       scd4x.stopPeriodicMeasurement();
-      scd4x.setTemperatureOffset(getTempOffset());
-      if (!lowEnergyMode) scd4x.startLowPowerPeriodicMeasurement();
+      MSC_Update.end();
+      USB_ACTIVE = false;
+      delay(100);
     }
-    if (lowEnergyMode) goto_deep_sleep(LOW_ENERGY_DEEP_SLEEP_TIME);
-    else               goto_deep_sleep(DEEP_SLEEP_TIME);
+    goto_deep_sleep(DEEP_SLEEP_TIME);
   }
 
   goto_light_sleep(LIGHT_SLEEP_TIME);

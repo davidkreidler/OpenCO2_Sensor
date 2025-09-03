@@ -8,7 +8,7 @@ OpenCO2 Sensor is an Arduino IDE compatible Repository for an E-Ink Indoor air q
 
 ## Buy it [here on Tindie](https://www.tindie.com/products/davidkreidler/open-co2-sensor/)
 
-Especially in winter, when windows are closed, a reminder to ventilate regularly is useful for health, comfort and well-being. Poor indoor air quality can lead to decreased productivity and learning disabilities. Therefore, I developed an Open-source ESP32 project that uses an E-Ink display and a LED to show the indoor CO2 content. Take the small Sensor anywhere you go to monitor the Air Quality, with Battery life of 11+ days.
+Especially in winter, when windows are closed, a reminder to ventilate regularly is useful for health, comfort and well-being. Poor indoor air quality can lead to decreased productivity and learning disabilities. Therefore, I developed an Open-source ESP32 project that uses an E-Ink display and a LED to show the indoor CO2 content. Take the small Sensor anywhere you go to monitor the Air Quality, with Battery life of up to 11 weeks.
 
 # CO2 Sensor
 
@@ -109,8 +109,9 @@ Use [internet-pi](https://github.com/geerlingguy/internet-pi) to store the CO2 /
 # Update via USB
 
 1. Download `FIRMWARE.BIN` from the latest [release](https://github.com/davidkreidler/OpenCO2_Sensor/releases)
-2. Plug a data USB-C cable into your PC and the Sensor
-3. copy `FIRMWARE.BIN` to the USB device
+2. Plug a data USB-C Cable
+3. Restart the OpenCO2 Sensor using the switch on the side
+4. Copy `FIRMWARE.BIN` to the USB device
 
 # OTA Update
 
