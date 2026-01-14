@@ -8,9 +8,10 @@ jobs:
 
     steps:
       - name: Check out repository
-        uses: actions/checkout@v2
+        uses: actions/checkout@v4
 
-      - uses: arduino/compile-sketches@v1
+      - name: Compile sketch
+        uses: arduino/compile-sketches@v1
         with:
           fqbn: "esp32:esp32:esp32s2"
           platforms: |
@@ -26,3 +27,35 @@ jobs:
               source-path: ./esp32-waveshare-epd
           sketch-paths: |
             - .
+
+      - name: Stage firmware into ./build/... and rename to FIRMWARE.BIN
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          BIN="$(
+            find /home/runner -type f -name 'OpenCO2_Sensor.ino.bin' \
+              ! -name '*bootloader*' \
+              ! -name '*partitions*' \
+              ! -name '*ota_data_initial*' \
+              2>/dev/null \
+            | head -n 1
+          )"
+
+          if [[ -z "${BIN:-}" || ! -f "$BIN" ]]; then
+            echo "ERROR: Could not find OpenCO2_Sensor.ino.bin on runner."
+            echo "Debug: listing any .ino.bin files under /home/runner:"
+            find /home/runner -type f -name '*.ino.bin' 2>/dev/null | head -n 200 || true
+            exit 1
+          fi
+
+          echo "Found firmware: $BIN"
+          mkdir -p build/esp32.esp32.esp32s2
+          cp "$BIN" build/esp32.esp32.esp32s2/OpenCO2_Sensor.ino.bin
+          cp build/esp32.esp32.esp32s2/OpenCO2_Sensor.ino.bin FIRMWARE.BIN
+
+      - name: Upload FIRMWARE.BIN artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: FIRMWARE.BIN
+          path: FIRMWARE.BIN
