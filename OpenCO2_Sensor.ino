@@ -421,6 +421,7 @@ void getColor(uint16_t co2, int* red, int* green, int* blue) {
 void setLED(uint16_t co2) {
   updateBatteryMode();
   if ((BatteryMode && !LEDonBattery)
+      || (co2 < 1000)
       || (!BatteryMode && !LEDonUSB)) {
     if (HWSubRev == 3) digitalWrite(LED_POWER, LOW);  // LED OFF
     else               digitalWrite(LED_POWER, HIGH); // LED OFF
