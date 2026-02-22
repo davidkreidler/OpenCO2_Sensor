@@ -130,6 +130,89 @@ void handleFavicon() {
   server.send_P(200, "image/png", (const char*)tblFavicon, sizeof(tblFavicon));
 }
 
+const static byte BITMAPHEADER[] PROGMEM = {
+  0x42, 0x4d, 0x72, 0x16, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x92, 0x00,
+  0x00, 0x00, 0x7c,
+  0x00, 0x00, 0x00, 0xc8, //200px
+  0x00, 0x00, 0x00, 0xc8, //200px
+  0x00,
+  0x00, 0x00, 0x01, 0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0xe0, 0x15,
+  0x00, 0x00, 0x23, 0x2e, 0x00, 0x00, 0x23, 0x2e, 0x00, 0x00, 0x02, 0x00,
+  0x00, 0x00, 0x02, 0x00, 0x00, 0x00, 0x00, 0x00, 0xff, 0x00, 0x00, 0xff,
+  0x00, 0x00, 0xff, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x42, 0x47,
+  0x52, 0x73, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+  0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+  0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+  0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+  0x00, 0x00, 0x02, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+  0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+  0x00, 0x00, 0x00, //color 0: RBG Black
+  0xff, 0xff, 0xff, //color 1: RBG White
+  0x00
+};
+
+void handleDisplayBitmap() {
+  //  BlackImage
+  //server.sendHeader("Content-Length", (String)fileSize);
+  server.setContentLength(CONTENT_LENGTH_UNKNOWN);
+  //server.sendHeader("Content-Encoding", "identity");
+  server.send(200, "image/bmp", "");
+  server.sendContent((const char*)BITMAPHEADER, sizeof(BITMAPHEADER));
+  //server.sendContent((const char *)paddedData, sizeof(paddedData));
+  
+  unsigned char data[5000] {}; // 200 x 200px / 8px/byte = 5000 bytes
+
+  memcpy(data, BlackImage, 5000);
+
+  unsigned char paddedData[28] {}; //One Row of Pixels, 200px = 200bit = 25 bytes, nearest multiple of 4: 28 bytes
+  unsigned char freshByte = 0;
+  uint8_t paddedBitNr = 0;
+  uint8_t paddedByteNr = 25;
+  uint32_t pixel = 0;
+  for (int orgByteNr = 0; orgByteNr < sizeof(data); orgByteNr ++) {
+    for (int orgBitNr = 0; orgBitNr < 8; orgBitNr++) {
+      unsigned char val = (((data[orgByteNr]) & (1 << orgBitNr)) != 0) ? 1 : 0;
+      freshByte += (val << 7 - paddedBitNr);
+
+      paddedBitNr++;
+      pixel++;
+      if (paddedBitNr == 8) {
+        paddedData[paddedByteNr] = freshByte;
+        paddedByteNr--;
+        freshByte = 0;
+        paddedBitNr = 0;
+      }
+
+      if (pixel % 200 == 0 && orgByteNr != 0) { //new row
+        server.sendContent((const char *)paddedData, sizeof(paddedData));
+        paddedByteNr = 25;
+      }
+    }
+  }
+  server.sendContent("");  // Send finish
+}
+void handleDisplayHEX() {
+  server.setContentLength(CONTENT_LENGTH_UNKNOWN);
+  server.send(200, "text/plain", "");
+  
+  unsigned char data[5200] {}; // 200 x 200px / 8px/byte = 5000 bytes
+  memcpy(data, BlackImage, 5200);
+  
+  char const hex_chars[16] = { '0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'A', 'B', 'C', 'D', 'E', 'F' };
+
+for( int i = 0; i < 5200; ++i )
+{
+    char const byte = data[i];
+    String result = "";
+    result += "0x";
+    result += hex_chars[ ( byte & 0xF0 ) >> 4 ];
+    result += hex_chars[ ( byte & 0x0F ) >> 0 ];
+    result += ", ";
+    server.sendContent(result);
+}
+  
+  server.sendContent("");  // Send finish
+}
 String GenerateMetrics() {
   String message = "";
   String idString = "{id=\"" + String("Open CO2 Sensor") + "\",mac=\"" + WiFi.macAddress().c_str() + "\"}";
@@ -745,6 +828,8 @@ void startWiFi() {
   server.on("/", HandleRootClient);
   server.on("/metrics", HandleRoot);
   server.on("/favicon.ico", handleFavicon);
+  server.on("/display.bmp", handleDisplayBitmap);
+  server.on("/display.txt", handleDisplayHEX);
   server.onNotFound(HandleNotFound);
   server.begin();
   Serial.println("HTTP server started at ip " + WiFi.localIP().toString() + ":" + String(port));

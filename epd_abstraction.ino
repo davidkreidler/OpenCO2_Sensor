@@ -28,7 +28,7 @@
 #include <EEPROM.h>
 
 RTC_DATA_ATTR uint16_t refreshes = 1;
-RTC_DATA_ATTR UBYTE *BlackImage;
+
 extern bool BatteryMode, comingFromDeepSleep;
 extern uint8_t HWSubRev;
 

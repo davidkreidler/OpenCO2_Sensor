@@ -3,6 +3,8 @@
 
 #include <stdlib.h>
 
+RTC_DATA_ATTR UBYTE *BlackImage;
+
 enum MenuOptions {
   LED,
   DISPLAY_MENU,
