@@ -191,28 +191,7 @@ void handleDisplayBitmap() {
   }
   server.sendContent("");  // Send finish
 }
-void handleDisplayHEX() {
-  server.setContentLength(CONTENT_LENGTH_UNKNOWN);
-  server.send(200, "text/plain", "");
-  
-  unsigned char data[5200] {}; // 200 x 200px / 8px/byte = 5000 bytes
-  memcpy(data, BlackImage, 5200);
-  
-  char const hex_chars[16] = { '0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'A', 'B', 'C', 'D', 'E', 'F' };
 
-for( int i = 0; i < 5200; ++i )
-{
-    char const byte = data[i];
-    String result = "";
-    result += "0x";
-    result += hex_chars[ ( byte & 0xF0 ) >> 4 ];
-    result += hex_chars[ ( byte & 0x0F ) >> 0 ];
-    result += ", ";
-    server.sendContent(result);
-}
-  
-  server.sendContent("");  // Send finish
-}
 String GenerateMetrics() {
   String message = "";
   String idString = "{id=\"" + String("Open CO2 Sensor") + "\",mac=\"" + WiFi.macAddress().c_str() + "\"}";
@@ -829,7 +808,6 @@ void startWiFi() {
   server.on("/metrics", HandleRoot);
   server.on("/favicon.ico", handleFavicon);
   server.on("/display.bmp", handleDisplayBitmap);
-  server.on("/display.txt", handleDisplayHEX);
   server.onNotFound(HandleNotFound);
   server.begin();
   Serial.println("HTTP server started at ip " + WiFi.localIP().toString() + ":" + String(port));
