@@ -130,15 +130,25 @@ void handleFavicon() {
   server.send_P(200, "image/png", (const char*)tblFavicon, sizeof(tblFavicon));
 }
 
+//a "Windows BITMAPINFOHEADER" originaly copied from a 1 bit per pixel 200 x 200px bmp file
 const static byte BITMAPHEADER[] PROGMEM = {
-  0x42, 0x4d, 0x72, 0x16, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x92, 0x00,
-  0x00, 0x00, 0x7c,
-  0x00, 0x00, 0x00, 0xc8, //200px
-  0x00, 0x00, 0x00, 0xc8, //200px
-  0x00,
-  0x00, 0x00, 0x01, 0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0xe0, 0x15,
-  0x00, 0x00, 0x23, 0x2e, 0x00, 0x00, 0x23, 0x2e, 0x00, 0x00, 0x02, 0x00,
-  0x00, 0x00, 0x02, 0x00, 0x00, 0x00, 0x00, 0x00, 0xff, 0x00, 0x00, 0xff,
+  0x42, 0x4d, //BM for Bitmap
+  0x72, 0x16, 0x00, 0x00, //The size of the BMP file in bytes 
+  0x00, 0x00, //Reserved; if created manually can be 0 
+  0x00, 0x00, //Reserved; if created manually can be 0 
+  0x92, 0x00, 0x00, 0x00, //Offset where the bitmap image is
+  0x7c, 0x00, 0x00, 0x00, //size of the follwing header
+  0xc8, 0x00, 0x00, 0x00, //200px
+  0xc8, 0x00, 0x00, 0x00, //200px
+  0x01, 0x00, //number of color planes (must be one)
+  0x01, 0x00, //bits per pixel (1)
+  0x00, 0x00, 0x00, 0x00, //compresion methode (BI_RGB)
+  0xe0, 0x15,  0x00, 0x00, //image size
+  0x23, 0x2e, 0x00, 0x00, // horizontal resolution of the image in pixel per meter
+  0x23, 0x2e, 0x00, 0x00, // vertical resolution of the image in pixel per meter
+  0x02, 0x00, 0x00, 0x00, //the number of colors in the color palette,
+  0x02, 0x00, 0x00, 0x00, //the number of important colors used
+  0x00, 0x00, 0xff, 0x00, 0x00, 0xff,
   0x00, 0x00, 0xff, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x42, 0x47,
   0x52, 0x73, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
   0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
@@ -152,42 +162,52 @@ const static byte BITMAPHEADER[] PROGMEM = {
 };
 
 void handleDisplayBitmap() {
-  //  BlackImage
-  //server.sendHeader("Content-Length", (String)fileSize);
-  server.setContentLength(CONTENT_LENGTH_UNKNOWN);
-  //server.sendHeader("Content-Encoding", "identity");
+  server.setContentLength(CONTENT_LENGTH_UNKNOWN); //the length is actually known, but for the proof of concept, "CONTENT_LENGTH_UNKNOWN" works
   server.send(200, "image/bmp", "");
   server.sendContent((const char*)BITMAPHEADER, sizeof(BITMAPHEADER));
-  //server.sendContent((const char *)paddedData, sizeof(paddedData));
-  
+
   unsigned char data[5000] {}; // 200 x 200px / 8px/byte = 5000 bytes
 
+  //This is an improper hack that works for a proof of concept.
+  //This hack will show image artefacts during screen draw.
+  //A proper implementation should use mutex to to access a protected copy of the framebuffer.
   memcpy(data, BlackImage, 5000);
 
-  unsigned char paddedData[28] {}; //One Row of Pixels, 200px = 200bit = 25 bytes, nearest multiple of 4: 28 bytes
+  //For a bitmap file, the size of each row is rounded up to a multiple of 4 bytes.
+  //The frame buffer of the display doesn't use padding, so we need to add the paddding.
+  //One Row of Pixels, 200px = 200bit = 25 bytes, nearest multiple of 4: 28 bytes
+  unsigned char paddedData[28] {}; 
   unsigned char freshByte = 0;
   uint8_t paddedBitNr = 0;
   uint8_t paddedByteNr = 25;
   uint32_t pixel = 0;
-  for (int orgByteNr = 0; orgByteNr < sizeof(data); orgByteNr ++) {
-    for (int orgBitNr = 0; orgBitNr < 8; orgBitNr++) {
-      unsigned char val = (((data[orgByteNr]) & (1 << orgBitNr)) != 0) ? 1 : 0;
-      freshByte += (val << 7 - paddedBitNr);
 
-      paddedBitNr++;
-      pixel++;
-      if (paddedBitNr == 8) {
-        paddedData[paddedByteNr] = freshByte;
-        paddedByteNr--;
-        freshByte = 0;
-        paddedBitNr = 0;
-      }
+  //The Display is rotated 90 deg.
+  //Bitmap files have their 0,0 in the bottom left corner.
 
-      if (pixel % 200 == 0 && orgByteNr != 0) { //new row
-        server.sendContent((const char *)paddedData, sizeof(paddedData));
-        paddedByteNr = 25;
+  //So for a proper BMP-File, the Frame has to be rotated, flipped and patted.
+  //The idea of this code is to go from a target coordinate and lookup the source coordinate.
+  //The code is "proof of concept"
+  for(int paddedLine = 0; paddedLine < 200; paddedLine++){
+    for(int paddedByteNr=0; paddedByteNr <25; paddedByteNr++){
+      paddedData[paddedByteNr] = 0;
+      for(int paddedBitNr=0; paddedBitNr <8; paddedBitNr++){
+
+        unsigned int pixel0 = (paddedLine*200 + paddedByteNr*8 +  paddedBitNr);
+        unsigned int pixel0X = 199-pixel0/200;
+        unsigned int pixel0Y = 199-pixel0%200;
+        unsigned int pixel =  pixel0X+pixel0Y*200;
+
+        unsigned int orgBitNr  = (pixel % 8);
+        unsigned int orgByteNr = (pixel /  8);
+
+
+        unsigned char val = (((data[orgByteNr]) & (1 << 7-orgBitNr)) != 0) ? 1 : 0;
+        paddedData[paddedByteNr] += (val << (7-paddedBitNr));
       }
     }
+    //send a completed row (starting from the bottom and working up)
+    server.sendContent((const char *)paddedData, sizeof(paddedData));
   }
   server.sendContent("");  // Send finish
 }
