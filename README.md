@@ -6,7 +6,7 @@
 
 OpenCO2 Sensor is an open-source indoor air quality sensor made in Germany. Measurements are displayed via an 1.54" E-Ink display, RGB LED in traffic light colors, or Wi-Fi, e.g., to Home Assistant. The Arduino code for the ESP32-S2 and Sensirion SCD40 is available here on GitHub.
 
-## Buy it [here on Open-Sensor.com](https://open-sensor.com/products/openco2-monitor-co2-sensor-luftqualitatssensor-co2-messgerat-made-in-germany-mit-e-ink-display-innenraum-luftqualitat-uberwachung?variant=62823149797725)
+## Buy it [here on Tindie](https://www.tindie.com/products/davidkreidler/open-co2-sensor/)
 
 Especially in winter, when windows stay closed, reminders to ventilate regularly help health and comfort. Poor indoor air quality can lead to lower productivity and learning difficulties. This open-source project helps you keep an eye on this at all times using the E-Ink display and LED. Take the small sensor with you wherever you go to monitor air quality – the battery life is up to 11 weeks.
 
