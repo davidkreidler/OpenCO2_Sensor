@@ -10,7 +10,7 @@
    - WiFiManager: https://github.com/tzapu/WiFiManager
    - ArduinoMqttClient (if MQTT is defined)
 */
-#define VERSION "v6.2"
+#define VERSION "v6.3"
 
 #define HEIGHT_ABOVE_SEA_LEVEL 50             // Berlin
 #define TZ_DATA "CET-1CEST,M3.5.0,M10.5.0/3"  // Europe/Berlin time zone from https://github.com/nayarsystems/posix_tz_db/blob/master/zones.csv
@@ -693,12 +693,7 @@ void toggleWiFi() {
   while (digitalRead(BUTTON) != 0) {  // wait for button press
     delay(100);
     
-    if (useWiFi && !BatteryMode) {
-      if (WiFi.status() != WL_CONNECTED) wifiManager.process();
-#ifdef airgradient
-      if (WiFi.status() == WL_CONNECTED) server.handleClient();
-#endif /* airgradient */
-    }
+    if (useWiFi && !BatteryMode) serviceWiFi();
 
     if (!ip_shown && WiFi.status() == WL_CONNECTED) {
       delay(100);
@@ -711,6 +706,33 @@ void toggleWiFi() {
       displayWiFi(useWiFi);
     }
   }
+}
+
+// The open "OpenCO2 Sensor" AP is only for a failed WLAN join.
+// autoConnect() leaves it up after the station connects, and a previous
+// portal can also restore it from flash. Drop it once we have a WLAN.
+void closeSetupAccessPoint() {
+  if (wifiManager.getConfigPortalActive()) wifiManager.stopConfigPortal();
+  if ((WiFi.getMode() & WIFI_AP) == 0) return;
+  // persistent was left false after a portal save, so the open AP
+  // would otherwise be restored from flash on the next boot
+  WiFi.persistent(true);
+  WiFi.softAPdisconnect(true);
+  WiFi.mode(WIFI_STA);
+}
+
+void serviceWiFi() {
+  if (WiFi.status() == WL_CONNECTED) {
+    closeSetupAccessPoint();
+#ifdef airgradient
+    server.handleClient();
+#endif /* airgradient */
+    return;
+  }
+
+  wifiManager.autoConnect("OpenCO2 Sensor");
+  wifiManager.process();
+  if (WiFi.status() == WL_CONNECTED) closeSetupAccessPoint();
 }
 
 void startWiFi() {
@@ -732,6 +754,7 @@ void startWiFi() {
   wifiManager.setClass("invert"); // dark theme
   wifiManager.setWiFiAutoReconnect(true);
   wifiManager.autoConnect("OpenCO2 Sensor");  // name of broadcasted SSID
+  if (WiFi.status() == WL_CONNECTED) closeSetupAccessPoint();
 
 #ifdef MQTT
   loadCredentials();
@@ -832,15 +855,7 @@ void loop() {
   updateCharging();
   measureESP32temperature();
 
-  if (useWiFi && !BatteryMode) {
-    if (WiFi.status() != WL_CONNECTED) {
-      wifiManager.autoConnect("OpenCO2 Sensor"); // Attempt to reconnect
-      wifiManager.process();
-    }
-#ifdef airgradient
-    if (WiFi.status() == WL_CONNECTED) server.handleClient();
-#endif /* airgradient */
-  }
+  if (useWiFi && !BatteryMode) serviceWiFi();
 
   // force 5 seconds measurement Interval when not on Battery
   if (!BatteryMode && !comingFromDeepSleep && (millis() - lastMeasurementTimeMs < 5000)) {
