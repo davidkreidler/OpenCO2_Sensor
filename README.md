@@ -132,12 +132,13 @@ Use [internet-pi](https://github.com/geerlingguy/internet-pi) to store the CO2 /
 1. Copy the esp32-waveshare-epd folder to your `Arduino/libraries/` directory
 2. [Install the ESP32 support for Arduino IDE](https://espressif-docs.readthedocs-hosted.com/projects/arduino-esp32/en/latest/installing.html)
 3. Choose `ESP32S2 Dev Module` under `Tools -> Board -> esp32`
+4. Choose `80MHz (WiFi)` under `Tools -> CPU Frequency` to save energy
 4. Connect the Sensor via USB and flip the power switch to on while holding the button on the back
 5. Choose the new COM Port in the Arduino IDE under `Tools -> Port -> COMXX`
 
 # Dependencies
 
-* [FastLED](https://github.com/FastLED/FastLED)
+* [FastLED](https://github.com/FastLED/FastLED) Use version: `3.10.3`
 * [Sensirion Core](https://github.com/Sensirion/arduino-core)
 * [Sensirion I2C SCD4x Arduino Library](https://github.com/Sensirion/arduino-i2c-scd4x)
 * [WiFiManager](https://github.com/tzapu/WiFiManager)
