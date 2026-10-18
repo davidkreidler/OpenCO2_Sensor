@@ -192,6 +192,34 @@ void LEDMenu() {
   }
 }
 
+/* Display settings, shared by the device menu and the web settings page */
+void toggleInvertDisplay() {
+  invertDisplay = !invertDisplay;
+  preferences.begin("co2-sensor", false);
+  preferences.putBool("invertDisplay", invertDisplay);
+  preferences.end();
+}
+
+void toggleTempUnit() {
+  useFahrenheit = !useFahrenheit;
+  preferences.begin("co2-sensor", false);
+  preferences.putBool("useFahrenheit", useFahrenheit);
+  preferences.end();
+}
+
+void toggleLanguage() {
+  english = !english;
+  preferences.begin("co2-sensor", false);
+  preferences.putBool("english", english);
+  preferences.end();
+}
+
+const char* webText(int id) {
+  // Text for the web settings page in the language selected on the device
+  if (id < 0 || id >= NUM_WEB_TEXTS) return "";
+  return english ? EnglishWebTexts[id] : GermanWebTexts[id];
+}
+
 void OptionsMenu() {  
   uint8_t selectedOption = 0;
   displayOptionsMenu(selectedOption);
@@ -214,22 +242,13 @@ void OptionsMenu() {
             toggleMaxBattery();
             break;
           case INVERT:
-            invertDisplay = !invertDisplay;
-            preferences.begin("co2-sensor", false);
-            preferences.putBool("invertDisplay", invertDisplay);
-            preferences.end();
+            toggleInvertDisplay();
             break;
           case TEMP_UNIT:
-            useFahrenheit = !useFahrenheit;
-            preferences.begin("co2-sensor", false);
-            preferences.putBool("useFahrenheit", useFahrenheit);
-            preferences.end(); 
+            toggleTempUnit();
             break;
           case LANGUAGE:
-            english = !english;
-            preferences.begin("co2-sensor", false);
-            preferences.putBool("english", english);
-            preferences.end(); 
+            toggleLanguage();
             break;
           case FONT:
             font += 1;
@@ -812,7 +831,11 @@ void displayOptionsMenu(uint8_t selectedOption) {
   if (limitMaxBattery  && HWSubRev > 2) Paint_DrawString_EN(200-17*4, 25, "~80%", &Font24, WHITE, BLACK);
   else Paint_DrawString_EN(200-17*4, 25, "100%", &Font24, WHITE, BLACK);
 
-  Paint_DrawString_EN(166, 25*3, (useFahrenheit? "*F":"*C"), &Font24, WHITE, BLACK);
+  // Temperature unit: Font24 has no degree glyph ('*' is an asterisk), so the degree sign is drawn as a circle
+  Paint_DrawString_EN(166 + 17, 25*3, (useFahrenheit? "F":"C"), &Font24, WHITE, BLACK);
+  // two 1 px circles give a 2 px ring (matches the Font24 stroke width)
+  Paint_DrawCircle(166 + 10, 25*3 + 7, 4, BLACK, DOT_PIXEL_1X1, DRAW_FILL_EMPTY);
+  Paint_DrawCircle(166 + 10, 25*3 + 7, 3, BLACK, DOT_PIXEL_1X1, DRAW_FILL_EMPTY);
   Paint_DrawNum(149, 25*5, (int32_t)(font+1), &Font24, BLACK, WHITE);
   Paint_DrawString_EN(166, 25*5, "/2", &Font24, WHITE, BLACK);
 
@@ -1205,9 +1228,12 @@ void displayinfo() {
 
   char average_temp[40];
   sprintf(average_temp, "%.1f", sumTemp/10);
-  strcat(average_temp, "*C");
   Paint_DrawString_EN(1, 49, "ESP32:", &Font16, WHITE, BLACK);
   Paint_DrawString_EN(67, 49, average_temp, &Font16, WHITE, BLACK);
+  // Unit: Font16 has no degree glyph ('*' is an asterisk), so the degree sign is drawn as a circle
+  int unitX = 67 + 11 * strlen(average_temp);
+  Paint_DrawString_EN(unitX + 9, 49, "C", &Font16, WHITE, BLACK);
+  Paint_DrawCircle(unitX + 5, 49 + 4, 2, BLACK, DOT_PIXEL_1X1, DRAW_FILL_EMPTY);
 
   int uptime_m = esp_timer_get_time() / 1000000 / 60;
   int uptime_h = uptime_m / 60;

@@ -84,6 +84,9 @@ RTC_DATA_ATTR bool USB_ACTIVE = false, initDone = false, BatteryMode = false, co
 RTC_DATA_ATTR bool LEDonBattery, LEDonUSB, useSmoothLEDcolor, invertDisplay, useFahrenheit, useWiFi, english, limitMaxBattery;
 RTC_DATA_ATTR uint8_t ledbrightness, HWSubRev, font, skipMeasurement = 10;
 RTC_DATA_ATTR float maxBatteryVoltage;
+RTC_DATA_ATTR float userTempCorrection = 0.0f; // user correction of the displayed temperature in degC (NVS key "userTempCorr")
+#define USER_TEMP_CORR_MAX 10.0f      // allowed user correction: -10.0 .. +10.0 degC
+#define SENSOR_TEMP_OFFSET_MAX 20.0f  // Sensirion SCD4x datasheet 3.7.1: recommended offset 0 .. 20 degC
 
 /* TEST_MODE */
 RTC_DATA_ATTR bool TEST_MODE;
@@ -173,7 +176,7 @@ void HandleRootClient() {
   server.setContentLength(CONTENT_LENGTH_UNKNOWN);
   server.send(200, "text/html", "");
 
-  String message = "<!DOCTYPE html>\n <html>\n";
+  String message = "<!DOCTYPE html>\n <html lang='" + String(english ? "en" : "de") + "'>\n";
   message += "<head>\n <title>OpenCO2 Sensor</title>\n <link rel='icon' href='/favicon.ico' type='image/png' />\n <meta http-equiv='refresh' content='300'>\n";
   message += "<style> .container { display: flex; gap: 15px; } .rounded-box { font-family: Verdana, Geneva, sans-serif; width: 400px; height: 300px; border-radius: 25px; position: relative; display: flex; flex-direction: column; justify-content: center; font-size: 4em; border: 4px solid grey; } .descr-text { position: absolute; top: 10px; left: 10px; font-size: 0.5em; } .center-text { font-size: 1.5em; text-align: center; } .unit-text { font-size: 0.5em; } </style>";
   message += "</head>\n";
@@ -185,13 +188,13 @@ void HandleRootClient() {
   char tempString[6];
   if (useFahrenheit) sprintf(tempString, "%.1f",(temperature * 1.8f) + 32.0f);  // convert to °F
   else               sprintf(tempString, "%.1f", temperature);
-  message += "<div class='rounded-box'><div class='descr-text'>Temperature</div><div class='center-text'><b>" + String(tempString) + "</b><div class='unit-text'>";
-  message += String(useFahrenheit? "*F": "*C") + "</div></div></div>\n";
-  message += "<div class='rounded-box'><div class='descr-text'>Humidity</div><div class='center-text'><b>" + String((int)humidity) + "</b><div class='unit-text'>%</div></div></div></div>\n";
+  message += "<a href='/settings' style='color:inherit;text-decoration:none' title='" + String(webText(WT_TILE_TOOLTIP)) + "'><div class='rounded-box'><div class='descr-text'>" + String(webText(WT_MAIN_TEMPERATURE)) + "</div><div class='center-text'><b>" + String(tempString) + "</b><div class='unit-text'>";
+  message += String(useFahrenheit? "&deg;F": "&deg;C") + "</div></div></div></a>\n";
+  message += "<div class='rounded-box'><div class='descr-text'>" + String(webText(WT_MAIN_HUMIDITY)) + "</div><div class='center-text'><b>" + String((int)humidity) + "</b><div class='unit-text'>%</div></div></div></div>\n";
   message += "<div id='CO2Plot' style='width:100%;max-width:1400px'></div>\n";
   message += "<div id='TempHumPlot' style='width:100%;max-width:1400px'></div>\n";
 
-  message += "<a target='_blank' rel='noopener noreferrer' href='https://github.com/davidkreidler/OpenCO2_Sensor/releases'>Installed Version: ";
+  message += "<a target='_blank' rel='noopener noreferrer' href='https://github.com/davidkreidler/OpenCO2_Sensor/releases'>" + String(webText(WT_MAIN_VERSION)) + " ";
   message += VERSION;
   message += "</a>\n";
   message += "<script>\n";
@@ -232,7 +235,7 @@ void HandleRootClient() {
 
   message = "];\n";
   message += "const data = [{x:times, y:yValues, mode:'lines', fill: 'tonexty', fillcolor: 'rgba(0, 100, 00, 0.3)', line: {color: '#006400'}}];\n";
-  message += "const layout = {yaxis: {range: [Math.min(...data[0].y), Math.max(...data[0].y) * 1.05], title: {text: 'CO2 (ppm)', font: { color: '#006400',size: 20}}}, title: {text: 'History', font: { color: '#808080', size: 40}}, plot_bgcolor:'black', paper_bgcolor:'black'};\n";
+  message += "const layout = {yaxis: {range: [Math.min(...data[0].y), Math.max(...data[0].y) * 1.05], title: {text: 'CO2 (ppm)', font: { color: '#006400',size: 20}}}, title: {text: '" + String(webText(WT_MAIN_HISTORY)) + "', font: { color: '#808080', size: 40}}, plot_bgcolor:'black', paper_bgcolor:'black'};\n";
   message += "Plotly.newPlot('CO2Plot', data, layout);\n";
   server.sendContent(message);
 
@@ -264,8 +267,8 @@ void HandleRootClient() {
   message = "];\nconst numPoints2 = " + String(index) + ";\n";
   message += "let times2 = generateValues(startTime, endTime, numPoints2).map(time => new Date(time));\n";
   message += "const data2 = [{x: times2, y: y1Values, name: 'Temperature', line: { color: '#FF4500' }, mode:'lines'}, {x: times2, y: y2Values, name: 'Humidity', line: { color: '#1E90FF' }, yaxis: 'y2', mode:'lines'}];\n";
-  message += "const layout2 = { showlegend: false, yaxis: {title: {text: 'Temperature (*" + String(useFahrenheit? "F" : "C");
-  message += ")', font: { color: '#FF4500',size: 20}}}, yaxis2: {title: {text: 'Humidity (%)', font: { color: '#1E90FF',size: 20}}, overlaying: 'y', side: 'right'}, plot_bgcolor:'black', paper_bgcolor:'black'};\n";
+  message += "const layout2 = { showlegend: false, yaxis: {title: {text: '" + String(webText(WT_MAIN_TEMPERATURE)) + " (\\u00B0" + String(useFahrenheit? "F" : "C");
+  message += ")', font: { color: '#FF4500',size: 20}}}, yaxis2: {title: {text: '" + String(webText(WT_MAIN_HUMIDITY)) + " (%)', font: { color: '#1E90FF',size: 20}}, overlaying: 'y', side: 'right'}, plot_bgcolor:'black', paper_bgcolor:'black'};\n";
   message += "Plotly.newPlot('TempHumPlot', data2, layout2);\n";
 
   message += "</script>\n</body>\n</html>\n";
@@ -315,7 +318,8 @@ void loadCredentials() {
 }
 #endif /* MQTT */
 
-float getTempOffset() {
+float getBaseTempOffset() {
+  // Built-in offsets from upstream v6.3 (compensate self-heating of the device)
   if (!BatteryMode) {
     if (useWiFi) return 12.2;
     return 4.4;
@@ -323,6 +327,179 @@ float getTempOffset() {
     return 0.0; // was with periodic measurment 0.8
   }
 }
+
+float getDesiredTempOffset() {
+  // Sensor rule (datasheet eq. 1): output = raw - offset.
+  // A negative user correction lowers the displayed value -> larger offset.
+  return getBaseTempOffset() - userTempCorrection;
+}
+
+float getTempOffset() {
+  // Offset sent to the SCD4x. The library casts to uint16_t without checks,
+  // so the value must be clamped to the valid/recommended range 0 .. 20 degC.
+  float offset = getDesiredTempOffset();
+  if (offset < 0.0f) offset = 0.0f;
+  if (offset > SENSOR_TEMP_OFFSET_MAX) offset = SENSOR_TEMP_OFFSET_MAX;
+  return offset;
+}
+
+float getSoftwareTempCorrection() {
+  // Part of the user correction the sensor cannot apply (outside 0 .. 20 degC).
+  // Added to the temperature after readout; humidity is not compensated for this part.
+  return getTempOffset() - getDesiredTempOffset();
+}
+
+#ifdef airgradient
+// Temperature differences (offsets, corrections) in the unit selected on the device.
+// A difference converts with factor 1.8 only (no +32).
+float tempDeltaToUnit(float degC) {
+  return useFahrenheit ? degC * 1.8f : degC;
+}
+
+String tempUnitHtml() {
+  return useFahrenheit ? String("&deg;F") : String("&deg;C");
+}
+
+String toggleRow(int labelId, String value, const char* action) {
+  // One row of the device settings table with a toggle button
+  String r = "<tr><td>" + String(webText(labelId)) + "</td><td>" + value + "</td><td>";
+  r += "<form method='POST' action='/settings'><input type='hidden' name='action' value='" + String(action) + "'>";
+  r += "<button type='submit'>" + String(webText(WT_TOGGLE)) + "</button></form></td></tr>\n";
+  return r;
+}
+
+void HandleSettingsGet() {
+  // Settings page in the language and temperature unit selected on the device
+  String unit = tempUnitHtml();
+  float corrMax = tempDeltaToUnit(USER_TEMP_CORR_MAX);
+  String msg = "<!DOCTYPE html>\n<html lang='" + String(english ? "en" : "de") + "'>\n<head>\n<meta charset='utf-8'>\n<title>OpenCO2 Settings</title>\n";
+  msg += "<meta name='viewport' content='width=device-width, initial-scale=1'>\n";
+  msg += "<style>body{font-family:Verdana,Geneva,sans-serif;color:grey;background:black;padding:16px;font-size:1.2em}";
+  msg += "input{font-size:1.2em;width:7em}button{font-size:1.2em;margin-left:8px}td{padding:4px 12px 4px 0}a{color:#1E90FF}form.inl{display:inline;margin:0}</style>\n";
+  msg += "</head>\n<body>\n";
+
+  // Section 1: device settings (same functions as the device menu "Display") and CO2 calibration
+  msg += "<h2>" + String(webText(WT_DEVICE_SETTINGS)) + "</h2>\n<table>\n";
+  msg += toggleRow(WT_TEMP_UNIT, unit, "unit");
+  msg += toggleRow(WT_LANGUAGE, String(webText(WT_LANGUAGE_VALUE)), "lang");
+  msg += toggleRow(WT_INVERT, String(webText(invertDisplay ? WT_ON : WT_OFF)), "invert");
+  msg += "</table>\n";
+  // CO2 calibration (forced recalibration): blocks the page for about 3 minutes, then the device restarts
+  msg += "<br>\n<h2>" + String(webText(WT_CALIBRATE)) + "</h2>\n<p>" + String(webText(WT_CAL_HINT)) + "</p>\n";
+  msg += "<form method='POST' action='/calibrate' onsubmit=\"return confirm('" + String(webText(WT_CAL_CONFIRM)) + "')\">";
+  msg += "<button type='submit'>" + String(webText(WT_CALIBRATE)) + "</button></form>\n";
+
+  // Section 2: temperature correction (one extra empty line before the heading)
+  msg += "<br>\n<h2>" + String(webText(WT_TITLE)) + "</h2>\n";
+  float shown = useFahrenheit ? (temperature * 1.8f) + 32.0f : temperature;
+  float sw = getSoftwareTempCorrection();
+  msg += "<div id='live'>\n<table>\n";
+  msg += "<tr><td>" + String(webText(WT_CURRENT_VALUE)) + "</td><td>" + String(shown, 1) + " " + unit + "</td></tr>\n";
+  msg += "<tr><td>" + String(webText(WT_USER_CORRECTION)) + "</td><td>" + String(tempDeltaToUnit(userTempCorrection), 1) + " " + unit + "</td></tr>\n";
+  msg += "</table>\n";
+  if (fabs(sw) > 0.05f) msg += "<p style='color:#FF4500'>" + String(webText(WT_SW_WARNING)) + "</p>\n";
+  msg += "</div>\n";
+  msg += "<form method='POST' action='/settings'>\n";
+  msg += "<p>" + String(webText(WT_CORR_LABEL)) + " " + unit + " (-" + String(corrMax, 1) + " .. +" + String(corrMax, 1) + ").<br>" + String(webText(WT_CORR_HINT)) + "</p>\n";
+  msg += "<input type='number' name='corr' min='-" + String(corrMax, 1) + "' max='" + String(corrMax, 1) + "' step='0.1' value='" + String(tempDeltaToUnit(userTempCorrection), 1) + "' oninput=\"var m=document.getElementById('saveMsg');if(m)m.style.display='none';\">";
+  msg += "<button type='submit'>" + String(webText(WT_SAVE)) + "</button>";
+  // Result of the last save, shown next to the button
+  if (server.hasArg("saved")) msg += " <span id='saveMsg' style='color:#2e8b57'>" + String(webText(WT_SAVED)) + "</span>";
+  if (server.hasArg("error")) msg += " <span id='saveMsg' style='color:#FF4500'>" + String(webText(WT_INVALID)) + " -" + String(corrMax, 1) + " .. +" + String(corrMax, 1) + " " + unit + "</span>";
+  msg += "\n</form>\n";
+  String jump = webText(WT_JUMP);
+  jump.replace("{N}", String(useFahrenheit ? 27 : 15));
+  msg += "<p>" + jump + "</p>\n";
+  msg += "<p>" + String(webText(WT_HUMIDITY)) + "</p>\n";
+  msg += "<p>" + String(webText(WT_BATTERY_NOTE)) + "</p>\n";
+  msg += "<p><a href='/'>" + String(webText(WT_BACK)) + "</a></p>\n";
+  // Refresh only the live values every 1 s so the page follows the device display; the input field is not touched while typing
+  msg += "<script>if(location.search){history.replaceState(null,'',location.pathname);}</script>\n";
+  msg += "<script>setInterval(function(){fetch('/settings').then(function(r){return r.text();}).then(function(t){";
+  msg += "var n=new DOMParser().parseFromString(t,'text/html').getElementById('live');";
+  msg += "if(n){document.getElementById('live').innerHTML=n.innerHTML;}}).catch(function(){});},1000);</script>\n";
+  msg += "</body>\n</html>\n";
+  server.send(200, "text/html; charset=utf-8", msg);
+}
+
+void HandleSettingsPost() {
+  // Device settings toggles (same functions as the device menu)
+  if (server.hasArg("action")) {
+    String a = server.arg("action");
+    if (a == "unit") toggleTempUnit();
+    else if (a == "lang") toggleLanguage();
+    else if (a == "invert") toggleInvertDisplay();
+    server.sendHeader("Location", "/settings");
+    server.send(303);
+    return;
+  }
+  // Temperature correction: entered in the unit selected on the device, stored internally in degC
+  String v = server.arg("corr");
+  v.trim();
+  v.replace(",", ".");
+  bool valid = v.length() > 0;
+  int dots = 0;
+  for (unsigned int i = 0; i < v.length() && valid; i++) {
+    char c = v.charAt(i);
+    if (c == '.') dots++;
+    else if ((c == '-' || c == '+') && i == 0) continue;
+    else if (!isDigit(c)) valid = false;
+  }
+  if (dots > 1) valid = false;
+  float corrMax = tempDeltaToUnit(USER_TEMP_CORR_MAX);
+  float newCorr = valid ? v.toFloat() : 999.0f;
+  if (!valid || newCorr < -corrMax || newCorr > corrMax) {
+    server.sendHeader("Location", "/settings?error=1");
+    server.send(303);
+    return;
+  }
+  newCorr = roundf(newCorr * 10.0f) / 10.0f;               // 0.1 steps in the entered unit
+  userTempCorrection = useFahrenheit ? newCorr / 1.8f : newCorr;
+  preferences.begin("co2-sensor", false);
+  preferences.putFloat("userTempCorr", userTempCorrection);
+  preferences.end();
+  // Sensor accepts configuration only while idle (datasheet 3.7).
+  // stopPeriodicMeasurement() of the library (v1.1.0) already waits the required 500 ms.
+  scd4x.stopPeriodicMeasurement();
+  scd4x.setTemperatureOffset(getTempOffset());
+  scd4x.startPeriodicMeasurement();
+  server.sendHeader("Location", "/settings?saved=1");
+  server.send(303);
+}
+
+void calibrationTick(int secondsLeft) {
+  // Keeps the browser connection alive and shows the progress every 10 s
+  if (secondsLeft % 10 == 0) server.sendContent(String(secondsLeft) + " " + String(webText(WT_CAL_REMAINING)) + "<br>\n");
+}
+
+void HandleCalibrate() {
+  // Runs the CO2 calibration (FRC) and streams the progress; the page stays open about 3 minutes
+  server.setContentLength(CONTENT_LENGTH_UNKNOWN);
+  server.send(200, "text/html; charset=utf-8", "");
+  String head = "<!DOCTYPE html>\n<html lang='" + String(english ? "en" : "de") + "'>\n<head>\n<meta charset='utf-8'>\n<title>OpenCO2 Calibration</title>\n";
+  head += "<meta name='viewport' content='width=device-width, initial-scale=1'>\n";
+  head += "<style>body{font-family:Verdana,Geneva,sans-serif;color:grey;background:black;padding:16px;font-size:1.2em}a{color:#1E90FF}</style>\n";
+  head += "</head>\n<body>\n<h2>" + String(webText(WT_CALIBRATE)) + "</h2>\n<p>" + String(webText(WT_CAL_RUNNING)) + "</p>\n";
+  head += "<!-- " + String("                                                                                                    ") + " -->\n"; // padding so browsers render early
+  server.sendContent(head);
+  int correction = 0;
+  int result = runCalibration(correction, calibrationTick);
+  String tail;
+  if (result == 0) {
+    tail = "<p style='color:#2e8b57'><b>" + String(webText(WT_CAL_RESULT)) + " " + String(correction) + " ppm</b></p>\n";
+    tail += "<p>" + String(webText(WT_CAL_DONE)) + "</p>\n";
+  } else if (result == 1) {
+    tail = "<p style='color:#FF4500'><b>" + String(webText(WT_CAL_FAIL)) + "</b></p>\n";
+  } else {
+    tail = "<p style='color:#FF4500'><b>" + String(webText(WT_CAL_ABORT)) + "</b></p>\n";
+  }
+  tail += "<p><a href='/settings'>" + String(webText(WT_BACK)) + "</a></p>\n</body>\n</html>\n";
+  server.sendContent(tail);
+  server.sendContent("");  // end of response
+  delay(2000);             // let the browser receive the result
+  ESP.restart();           // restart normal measurement (same as the device menu)
+}
+#endif /* airgradient */
 
 void initOnce() {
   initEpdOnce();
@@ -373,6 +550,8 @@ void initOnce() {
   invertDisplay = preferences.getBool("invertDisplay", false);
   useFahrenheit = preferences.getBool("useFahrenheit", false);
   english = preferences.getBool("english", false);
+  userTempCorrection = preferences.getFloat("userTempCorr", 0.0f);
+  if (isnan(userTempCorrection) || userTempCorrection < -USER_TEMP_CORR_MAX || userTempCorrection > USER_TEMP_CORR_MAX) userTempCorrection = 0.0f;
   preferences.end();
 
   scd4x.stopPeriodicMeasurement();  // stop potentially previously started measurement
@@ -581,7 +760,10 @@ uint8_t calcBatteryPercentage(float voltage) {
     return 100;
 }
 
-void calibrate() {
+// Calibration core, shared by the device menu and the web page.
+// Returns 0 = ok (correction in ppm set), 1 = failed, 2 = aborted by button.
+// tick (optional) is called once per second with the remaining seconds.
+int runCalibration(int &correction, void (*tick)(int)) {
   /* Only run this, if calibration is needed!
    let the Sensor run outside for 3+ minutes before.
  */
@@ -591,7 +773,8 @@ void calibrate() {
   displayCalibrationWarning();
   delay(500);
   for (int i = 0; i < 180; i++) {
-    if (digitalRead(BUTTON) == 0) return;  // abort
+    if (digitalRead(BUTTON) == 0) return 2;  // abort
+    if (tick) tick(180 - i);
     delay(1000);
   }
 
@@ -599,12 +782,19 @@ void calibrate() {
   delay(500);
   uint16_t frcCorrection;
   scd4x.performForcedRecalibration((uint16_t)420, frcCorrection);
-  
-  if (frcCorrection == 65535) DisplayCalibrationFail();
-  else {
-    int correction = frcCorrection - 32768;
-    DisplayCalibrationResult(correction);
+
+  if (frcCorrection == 65535) {
+    DisplayCalibrationFail();
+    return 1;
   }
+  correction = frcCorrection - 32768;
+  DisplayCalibrationResult(correction);
+  return 0;
+}
+
+void calibrate() {
+  int correction = 0;
+  if (runCalibration(correction, NULL) == 2) return;  // aborted (upstream behaviour)
   while (digitalRead(BUTTON) != 0) delay(400);  // wait for button press
   ESP.restart();
 }
@@ -767,6 +957,9 @@ void startWiFi() {
   delay(100);
   server.on("/", HandleRootClient);
   server.on("/metrics", HandleRoot);
+  server.on("/settings", HTTP_GET, HandleSettingsGet);
+  server.on("/settings", HTTP_POST, HandleSettingsPost);
+  server.on("/calibrate", HTTP_POST, HandleCalibrate);
   server.on("/favicon.ico", handleFavicon);
   server.onNotFound(HandleNotFound);
   server.begin();
@@ -892,6 +1085,7 @@ void loop() {
     uint16_t dummyCo2; // CO2 output is returned as 0 ppm
     float new_humidity = 0.0f;
     error = scd4x.readMeasurement(dummyCo2, new_temperature, new_humidity);
+    if (!error) new_temperature += getSoftwareTempCorrection();
     if (!error
     && (skipMeasurement > 1) 
     && (fabs(new_temperature - temperature) < 0.5)
@@ -905,9 +1099,11 @@ void loop() {
 
     if (HWSubRev < 3) scd4x.measureSingleShot(); // Ignore first measurement after wake up.
     error = scd4x.measureAndReadSingleShot(new_co2, new_temperature, humidity);
+    if (!error) new_temperature += getSoftwareTempCorrection();
     scd4x.powerDown();
   } else {
     error = scd4x.readMeasurement(new_co2, new_temperature, humidity);
+    if (!error) new_temperature += getSoftwareTempCorrection();
   }
   lastMeasurementTimeMs = millis();
   if (error) {
