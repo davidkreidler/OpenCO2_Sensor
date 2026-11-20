@@ -17,7 +17,9 @@
 #define LIGHT_SLEEP_TIME 500
 #define DEEP_SLEEP_TIME 29124             // 30 sec
 #define DEEP_SLEEP_TIME_NO_DISPLAY_UPDATE DEEP_SLEEP_TIME + 965 // offset for no display update
+#define WIFI_RETRY_INTERVAL 300000        // 5 min, retry saved WiFi while the setup portal is open
 static unsigned long lastMeasurementTimeMs = 0;
+static unsigned long lastAutoConnectMs = 0;
 
 /* Includes display */
 #include "DEV_Config.h"
@@ -730,8 +732,14 @@ void serviceWiFi() {
     return;
   }
 
+  // autoConnect() blocks while it retries the saved WiFi, which starves the
+  // portal. Serve the portal every loop and only retry from time to time.
+  if (wifiManager.getConfigPortalActive()) {
+    wifiManager.process();
+    if (millis() - lastAutoConnectMs < WIFI_RETRY_INTERVAL) return;
+  }
+  lastAutoConnectMs = millis();
   wifiManager.autoConnect("OpenCO2 Sensor");
-  wifiManager.process();
   if (WiFi.status() == WL_CONNECTED) closeSetupAccessPoint();
 }
 
@@ -753,6 +761,7 @@ void startWiFi() {
   wifiManager.setConfigPortalBlocking(false);
   wifiManager.setClass("invert"); // dark theme
   wifiManager.setWiFiAutoReconnect(true);
+  lastAutoConnectMs = millis();
   wifiManager.autoConnect("OpenCO2 Sensor");  // name of broadcasted SSID
   if (WiFi.status() == WL_CONNECTED) closeSetupAccessPoint();
 
